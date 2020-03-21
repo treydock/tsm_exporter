@@ -46,7 +46,7 @@ func metricsHandler(config *config.Config, logger log.Logger) http.HandlerFunc {
 		}
 		target, ok := config.Targets[t]
 		if !ok {
-			http.Error(w, fmt.Sprintf("Unknown target %s", t), http.StatusBadRequest)
+			http.Error(w, fmt.Sprintf("Unknown target %s", t), http.StatusNotFound)
 			return
 		}
 

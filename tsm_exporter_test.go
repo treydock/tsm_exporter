@@ -61,7 +61,7 @@ func TestMetricsHandler(t *testing.T) {
 	collector.DsmadmcVolumesUnavailExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "0\n", nil
 	}
-	body, err := queryExporter("test1")
+	body, err := queryExporter("target=test1", http.StatusOK)
 	if err != nil {
 		t.Fatalf("Unexpected error GET /tsm: %s", err.Error())
 	}
@@ -77,7 +77,7 @@ func TestMetricsHandlerCollectorsDefined(t *testing.T) {
 	collector.DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockedDBStdout, nil
 	}
-	body, err := queryExporter("test2")
+	body, err := queryExporter("target=test2", http.StatusOK)
 	if err != nil {
 		t.Fatalf("Unexpected error GET /tsm: %s", err.Error())
 	}
@@ -89,8 +89,16 @@ func TestMetricsHandlerCollectorsDefined(t *testing.T) {
 	}
 }
 
-func queryExporter(target string) (string, error) {
-	resp, err := http.Get(fmt.Sprintf("http://%s/tsm?target=%s", address, target))
+func TestMetricsHandlerNoTarget(t *testing.T) {
+	_, _ = queryExporter("", http.StatusBadRequest)
+}
+
+func TestMetricsHandlerBadTarget(t *testing.T) {
+	_, _ = queryExporter("target=dne", http.StatusNotFound)
+}
+
+func queryExporter(param string, want int) (string, error) {
+	resp, err := http.Get(fmt.Sprintf("http://%s/tsm?%s", address, param))
 	if err != nil {
 		return "", err
 	}
@@ -101,7 +109,7 @@ func queryExporter(target string) (string, error) {
 	if err := resp.Body.Close(); err != nil {
 		return "", err
 	}
-	if want, have := http.StatusOK, resp.StatusCode; want != have {
+	if have := resp.StatusCode; want != have {
 		return "", fmt.Errorf("want /metrics status code %d, have %d. Body:\n%s", want, have, b)
 	}
 	return string(b), nil
