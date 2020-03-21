@@ -32,11 +32,12 @@ type SafeConfig struct {
 
 type Target struct {
 	sync.Mutex
-	Name       string
-	Servername string   `yaml:"servername"`
-	Id         string   `yaml:"id"`
-	Password   string   `yaml:"password"`
-	Collectors []string `yaml:"collectors,omitempty"`
+	Name        string
+	Servername  string   `yaml:"servername"`
+	Id          string   `yaml:"id"`
+	Password    string   `yaml:"password"`
+	LibraryName string   `yaml:"library_name"`
+	Collectors  []string `yaml:"collectors,omitempty"`
 }
 
 func (sc *SafeConfig) ReloadConfig(configFile string) error {

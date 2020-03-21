@@ -15,6 +15,7 @@ package collector
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -120,6 +121,9 @@ func (c *LibVolumesCollector) collect() (LibVolumeMetric, error) {
 
 func dsmadmcLibVolumes(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 	query := "SELECT count(*) FROM libvolumes WHERE status='Scratch'"
+	if target.LibraryName != "" {
+		query = query + fmt.Sprintf(" AND library_name='%s'", target.LibraryName)
+	}
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
