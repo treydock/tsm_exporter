@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -102,6 +103,9 @@ func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logg
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
+		if strings.Contains(stdout.String(), "No match found using this criteria") {
+			return "", nil
+		}
 		level.Error(logger).Log("msg", "Error executing dsmadc", "err", stderr.String(), "out", stdout.String())
 		return "", err
 	}
