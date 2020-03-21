@@ -71,7 +71,7 @@ func TestDsmadmcQueryWithError(t *testing.T) {
 	defer cancel()
 	_, err := dsmadmcQuery(&config.Target{}, "query", ctx, log.NewNopLogger())
 	if err == nil {
-		t.Errorf("Expected error: %s", err.Error())
+		t.Errorf("Expected error")
 	}
 }
 
