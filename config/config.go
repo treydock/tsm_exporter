@@ -22,7 +22,7 @@ import (
 )
 
 type Config struct {
-	Targets map[string]Target `yaml:"targets"`
+	Targets map[string]*Target `yaml:"targets"`
 }
 
 type SafeConfig struct {
@@ -48,7 +48,8 @@ func (sc *SafeConfig) ReloadConfig(configFile string) error {
 	if err := yaml.Unmarshal(yamlFile, c); err != nil {
 		return fmt.Errorf("Error parsing config file %s: %s", configFile, err)
 	}
-	for key, target := range c.Targets {
+	for key := range c.Targets {
+		target := c.Targets[key]
 		target.Name = key
 		if target.Servername == "" {
 			target.Servername = key

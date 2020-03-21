@@ -40,7 +40,7 @@ type VolumeUnavailMetric struct {
 
 type VolumesCollector struct {
 	unavailable *prometheus.Desc
-	target      config.Target
+	target      *config.Target
 	logger      log.Logger
 	useCache    bool
 }
@@ -49,7 +49,7 @@ func init() {
 	registerCollector("volumes", true, NewVolumesExporter)
 }
 
-func NewVolumesExporter(target config.Target, logger log.Logger, useCache bool) Collector {
+func NewVolumesExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
 	return &VolumesCollector{
 		unavailable: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volumes", "unavailable"),
 			"Number of unavailable volumes", nil, nil),
@@ -118,7 +118,7 @@ func (c *VolumesCollector) collect() (VolumeUnavailMetric, error) {
 	return metrics, nil
 }
 
-func dsmadmcVolumesUnavail(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcVolumesUnavail(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 	query := "SELECT count(*) FROM volumes WHERE access='UNAVAILABLE'"
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err

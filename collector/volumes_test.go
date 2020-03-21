@@ -27,7 +27,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-func TestvolumesUnavailParse(t *testing.T) {
+func TestVolumesUnavailParse(t *testing.T) {
 	mockStdout := "1\n"
 	metrics, err := volumesUnavailParse(mockStdout, log.NewNopLogger())
 	if err != nil {
@@ -43,7 +43,7 @@ func TestVolumesCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcVolumesUnavailExec = func(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcVolumesUnavailExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "1\n", nil
 	}
 	expected := `
@@ -57,7 +57,7 @@ func TestVolumesCollector(t *testing.T) {
     # TYPE tsm_volumes_unavailable gauge
     tsm_volumes_unavailable 1
 	`
-	collector := NewVolumesExporter(config.Target{}, log.NewNopLogger(), false)
+	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
 	if val := testutil.CollectAndCount(collector); val != 4 {
 		t.Errorf("Unexpected collection count %d, expected 4", val)
@@ -72,7 +72,7 @@ func TestVolumesCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcVolumesUnavailExec = func(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcVolumesUnavailExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -83,7 +83,7 @@ func TestVolumesCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="volumes"} 0
 	`
-	collector := NewVolumesExporter(config.Target{}, log.NewNopLogger(), false)
+	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
 	if val := testutil.CollectAndCount(collector); val != 3 {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
@@ -98,7 +98,7 @@ func TestVolumesCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcVolumesUnavailExec = func(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcVolumesUnavailExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -109,7 +109,7 @@ func TestVolumesCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="volumes"} 1
 	`
-	collector := NewVolumesExporter(config.Target{}, log.NewNopLogger(), false)
+	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
 	if val := testutil.CollectAndCount(collector); val != 3 {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
@@ -124,7 +124,7 @@ func TestVolumesCollectorCache(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcVolumesUnavailExec = func(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcVolumesUnavailExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "1\n", nil
 	}
 	expected := `
@@ -142,12 +142,12 @@ func TestVolumesCollectorCache(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="volumes"} 1
 	`
-	collector := NewVolumesExporter(config.Target{}, log.NewNopLogger(), true)
+	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger(), true)
 	gatherers := setupGatherer(collector)
 	if val := testutil.CollectAndCount(collector); val != 4 {
 		t.Errorf("Unexpected collection count %d, expected 4", val)
 	}
-	DsmadmcVolumesUnavailExec = func(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcVolumesUnavailExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	if val := testutil.CollectAndCount(collector); val != 4 {
@@ -157,7 +157,7 @@ func TestVolumesCollectorCache(t *testing.T) {
 		"tsm_volumes_unavailable", "tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
-	DsmadmcVolumesUnavailExec = func(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcVolumesUnavailExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	if val := testutil.CollectAndCount(collector); val != 4 {
@@ -169,14 +169,14 @@ func TestVolumesCollectorCache(t *testing.T) {
 	}
 }
 
-func TestdsmadmcVolumesUnavail(t *testing.T) {
+func TestDsmadmcVolumesUnavail(t *testing.T) {
 	execCommand = fakeExecCommand
 	mockedExitStatus = 0
 	mockedStdout = "foo"
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcVolumesUnavail(config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcVolumesUnavail(&config.Target{}, ctx, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

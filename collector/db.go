@@ -78,7 +78,7 @@ type DBCollector struct {
 	TotalBuffReq *prometheus.Desc
 	SortOverflow *prometheus.Desc
 	PkgHitRatio  *prometheus.Desc
-	target       config.Target
+	target       *config.Target
 	logger       log.Logger
 	useCache     bool
 }
@@ -87,7 +87,7 @@ func init() {
 	registerCollector("db", true, NewDBExporter)
 }
 
-func NewDBExporter(target config.Target, logger log.Logger, useCache bool) Collector {
+func NewDBExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
 	return &DBCollector{
 		TotalSpace: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "space_total_bytes"),
 			"DB total space in bytes", []string{"dbname"}, nil),
@@ -196,7 +196,7 @@ func (c *DBCollector) collect() ([]DBMetric, error) {
 	return metrics, nil
 }
 
-func dsmadmcDB(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcDB(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 	fields := getDBFields()
 	query := fmt.Sprintf("SELECT %s FROM db", strings.Join(fields, ","))
 	level.Debug(logger).Log("msg", fmt.Sprintf("query=%s", query))
@@ -241,7 +241,7 @@ func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
 
 func getDBFields() []string {
 	var fields []string
-	for k, _ := range dbMap {
+	for k := range dbMap {
 		fields = append(fields, k)
 	}
 	sort.Strings(fields)

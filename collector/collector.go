@@ -34,7 +34,7 @@ var (
 	exporterUseCache = kingpin.Flag("exporter.use-cache", "Use cached metrics if commands timeout or produce errors").Default("false").Bool()
 	execCommand      = exec.CommandContext
 	collectorState   = make(map[string]bool)
-	factories        = make(map[string]func(target config.Target, logger log.Logger, useCache bool) Collector)
+	factories        = make(map[string]func(target *config.Target, logger log.Logger, useCache bool) Collector)
 	collectDuration  = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "exporter", "collector_duration_seconds"),
 		"Collector time duration.",
@@ -59,12 +59,12 @@ type TSMCollector struct {
 	Collectors map[string]Collector
 }
 
-func registerCollector(collector string, isDefaultEnabled bool, factory func(target config.Target, logger log.Logger, useCache bool) Collector) {
+func registerCollector(collector string, isDefaultEnabled bool, factory func(target *config.Target, logger log.Logger, useCache bool) Collector) {
 	collectorState[collector] = isDefaultEnabled
 	factories[collector] = factory
 }
 
-func NewCollector(target config.Target, logger log.Logger) *TSMCollector {
+func NewCollector(target *config.Target, logger log.Logger) *TSMCollector {
 	collectors := make(map[string]Collector)
 	for key, enabled := range collectorState {
 		enable := false
@@ -73,8 +73,8 @@ func NewCollector(target config.Target, logger log.Logger) *TSMCollector {
 		} else if sliceContains(target.Collectors, key) {
 			enable = true
 		}
+		var collector Collector
 		if enable {
-			var collector Collector
 			collector = factories[key](target, log.With(logger, "collector", key), *exporterUseCache)
 			collectors[key] = collector
 		}
@@ -91,7 +91,7 @@ func sliceContains(slice []string, str string) bool {
 	return false
 }
 
-func dsmadmcQuery(target config.Target, query string, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logger log.Logger) (string, error) {
 	servername := fmt.Sprintf("-SERVERName=%s", target.Servername)
 	id := fmt.Sprintf("-ID=%s", target.Id)
 	password := fmt.Sprintf("-PAssword=%s", target.Password)

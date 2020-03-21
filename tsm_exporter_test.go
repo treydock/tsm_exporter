@@ -40,9 +40,9 @@ func TestMain(m *testing.M) {
 	target1 := config.Target{}
 	target2 := config.Target{Collectors: []string{"volumes"}}
 	c := &config.Config{}
-	c.Targets = make(map[string]config.Target)
-	c.Targets["test1"] = target1
-	c.Targets["test2"] = target2
+	c.Targets = make(map[string]*config.Target)
+	c.Targets["test1"] = &target1
+	c.Targets["test2"] = &target2
 	go func() {
 		http.Handle("/tsm", metricsHandler(c, log.NewNopLogger()))
 		err := http.ListenAndServe(address, nil)
@@ -58,7 +58,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestMetricsHandler(t *testing.T) {
-	collector.DsmadmcVolumesUnavailExec = func(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcVolumesUnavailExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "0\n", nil
 	}
 	body, err := queryExporter("test1")
@@ -71,10 +71,10 @@ func TestMetricsHandler(t *testing.T) {
 }
 
 func TestMetricsHandlerCollectorsDefined(t *testing.T) {
-	collector.DsmadmcVolumesUnavailExec = func(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcVolumesUnavailExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "0\n", nil
 	}
-	collector.DsmadmcDBExec = func(target config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockedDBStdout, nil
 	}
 	body, err := queryExporter("test2")

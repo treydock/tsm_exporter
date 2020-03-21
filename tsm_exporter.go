@@ -50,8 +50,8 @@ func metricsHandler(config *config.Config, logger log.Logger) http.HandlerFunc {
 			return
 		}
 
-		tsmCollector := collector.NewCollector(target, logger)
 		target.Lock()
+		tsmCollector := collector.NewCollector(target, logger)
 		defer target.Unlock()
 		for key, collector := range tsmCollector.Collectors {
 			level.Debug(logger).Log("msg", fmt.Sprintf("Enabled collector %s", key))
