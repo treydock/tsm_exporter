@@ -222,15 +222,15 @@ func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
 			if f.Kind() == reflect.String {
 				f.SetString(values[i])
 			} else {
-				if val, err := strconv.ParseFloat(values[i], 64); err == nil {
-					if strings.HasSuffix(k, "_MB") {
-						valBytes := val * 1024 * 1024
-						f.SetFloat(valBytes)
-					} else {
-						f.SetFloat(val)
-					}
-				} else {
+				val, err := strconv.ParseFloat(values[i], 64)
+				if err != nil {
 					level.Error(logger).Log("msg", fmt.Sprintf("Error parsing %s value %s: %s", k, values[i], err.Error()))
+				}
+				if strings.HasSuffix(k, "_MB") {
+					valBytes := val * 1024 * 1024
+					f.SetFloat(valBytes)
+				} else {
+					f.SetFloat(val)
 				}
 			}
 		}
