@@ -36,14 +36,17 @@ targets:
   tsm1.example.com:
     id: somwell
     password: secret
+    library_name: TAPE
   tsm2.example.com:
     id: somwell
     password: secret
     collectors:
     - volumes
+    - log
+    - db
 ```
 
-This exporter could then be queried via one of these two commands below.  The `tsm2.example.com` target will only run the `volumes` collector.
+This exporter could then be queried via one of these two commands below.  The `tsm2.example.com` target will only run the `volumes`, `log` and `db` collectors.
 
 ```
 curl http://localhost:9310/tsm?target=tsm1.example.com
@@ -52,7 +55,7 @@ curl http://localhost:9310/tsm?target=tsm2.example.com
 
 The key for each target should match the `servername` value for the entry in `dsm.sys`.  You may optionally add the `servername` key to override the servername used when executing `dsmadmc`.
 
-The `libvolumes` and `drives` collectors can be limited to a specific library name via `library_name` config value, eg: `library_name: TAPE`
+The `libvolumes` and `drives` collectors can be limited to a specific library name via `library_name` config value, eg: `library_name: TAPE`.
 
 ## Dependencies
 
