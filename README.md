@@ -21,7 +21,7 @@ Collectors are enabled or disabled via a config file.
 
 Name | Description | Default
 -----|-------------|--------
-volumes | Collect count of unavailable volumes | Enabled
+volumes | Collect count of unavailable or readonly volumes | Enabled
 db | Collect DB space information | Enabled
 
 ## Configuration
