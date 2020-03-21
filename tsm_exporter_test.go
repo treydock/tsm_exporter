@@ -33,7 +33,8 @@ const (
 )
 
 var (
-	mockedDBStdout = "88.6,TSMDB1,3092796,1453663,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n"
+	mockedDBStdout  = "88.6,TSMDB1,3092796,1453663,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n"
+	mockedLogStdout = "32426.00,32768.00,342.00\n"
 )
 
 func TestMain(m *testing.M) {
@@ -61,6 +62,12 @@ func TestMetricsHandler(t *testing.T) {
 	collector.DsmadmcVolumesUnavailExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "0\n", nil
 	}
+	collector.DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockedDBStdout, nil
+	}
+	collector.DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockedLogStdout, nil
+	}
 	body, err := queryExporter("target=test1", http.StatusOK)
 	if err != nil {
 		t.Fatalf("Unexpected error GET /tsm: %s", err.Error())
@@ -76,6 +83,9 @@ func TestMetricsHandlerCollectorsDefined(t *testing.T) {
 	}
 	collector.DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockedDBStdout, nil
+	}
+	collector.DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockedLogStdout, nil
 	}
 	body, err := queryExporter("target=test2", http.StatusOK)
 	if err != nil {
