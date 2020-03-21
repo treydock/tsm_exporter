@@ -24,6 +24,7 @@ Name | Description | Default
 volumes | Collect count of unavailable or readonly volumes | Enabled
 db | Collect DB space information | Enabled
 libvolumes | Collect count of scratch tapes | Enabled
+drives | Collect count of offline drives | Enabled
 
 ## Configuration
 
