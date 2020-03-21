@@ -1,0 +1,7 @@
+/.tarballs
+/.build
+/tsm_exporter
+/c.out
+/coverage.html
+/coverage.txt
+/tsm_exporter.yaml

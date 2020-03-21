@@ -1,0 +1,4 @@
+targets:
+  tsm1.example.com:
+    id: somwell
+    password: secret
