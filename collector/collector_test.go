@@ -63,6 +63,18 @@ func setupGatherer(collector Collector) prometheus.Gatherer {
 	return gatherers
 }
 
+func TestDsmadmcQueryWithError(t *testing.T) {
+	execCommand = fakeExecCommand
+	mockedExitStatus = 1
+	defer func() { execCommand = exec.CommandContext }()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := dsmadmcQuery(&config.Target{}, "query", ctx, log.NewNopLogger())
+	if err == nil {
+		t.Errorf("Expected error: %s", err.Error())
+	}
+}
+
 func TestDsmadmcQueryWithNoResultsError(t *testing.T) {
 	execCommand = fakeExecCommand
 	mockedExitStatus = 1
