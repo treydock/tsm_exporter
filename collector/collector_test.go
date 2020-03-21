@@ -22,7 +22,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/treydock/tsm_exporter/config"
 )
 
 var (
@@ -59,4 +61,20 @@ func setupGatherer(collector Collector) prometheus.Gatherer {
 	registry.MustRegister(collector)
 	gatherers := prometheus.Gatherers{registry}
 	return gatherers
+}
+
+func TestDsmadmcQueryWithNoResultsError(t *testing.T) {
+	execCommand = fakeExecCommand
+	mockedExitStatus = 1
+	mockedStdout = "ANR2034E SELECT: No match found using this criteria.\nANS8001I Return code 11.\n"
+	defer func() { execCommand = exec.CommandContext }()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := dsmadmcQuery(&config.Target{}, "query", ctx, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err.Error())
+	}
+	if out != "" {
+		t.Errorf("Unexpected out: %s", out)
+	}
 }
