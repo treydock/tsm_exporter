@@ -52,6 +52,8 @@ curl http://localhost:9310/tsm?target=tsm2.example.com
 
 The key for each target should match the `servername` value for the entry in `dsm.sys`.  You may optionally add the `servername` key to override the servername used when executing `dsmadmc`.
 
+The `libvolumes` and `drives` collectors can be limited to a specific library name via `library_name` config value, eg: `library_name: TAPE`
+
 ## Dependencies
 
 This exporter relies on the `dsmadmc` command. The host running the exporter is expected to have both the `dsmadmc` executable and `/opt/tivoli/tsm/client/ba/bin/dsm.sys`.
