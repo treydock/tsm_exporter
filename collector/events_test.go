@@ -29,15 +29,15 @@ import (
 
 var (
 	mockEventStdout = `
-FOO,Completed
-FOO,Completed
-BAR,Not Started
-BAR,Not Started
+FOO,Completed,2020-03-22 05:09:43.000000,2020-03-22 05:41:14.000000
+FOO,Future,,
+BAR,Not Started,,
+BAR,Not Started,,
 `
 )
 
 func TestEventsParse(t *testing.T) {
-	metrics, err := eventsParse(mockEventStdout, nil, log.NewNopLogger())
+	metrics, err := eventsParse(mockEventStdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected err: %s", err.Error())
 		return
@@ -46,16 +46,19 @@ func TestEventsParse(t *testing.T) {
 		t.Errorf("Expected 2 metrics, got %d", len(metrics))
 		return
 	}
-	if val := metrics[0].notstarted; val != 0 {
-		t.Errorf("Expected 0 notstarted, got %v", val)
+	if val := metrics["FOO"].notCompleted; val != 0 {
+		t.Errorf("Expected 0 notCompleted, got %v", val)
 	}
-	if val := metrics[1].notstarted; val != 2 {
-		t.Errorf("Expected 2 notstarted, got %v", val)
+	if val := metrics["FOO"].duration; val != 1891 {
+		t.Errorf("Expected 1891 duration, got %v", val)
+	}
+	if val := metrics["BAR"].notCompleted; val != 2 {
+		t.Errorf("Expected 1 notCompleted, got %v", val)
 	}
 }
 
 func TestEventsParseWithSchedules(t *testing.T) {
-	metrics, err := eventsParse(mockEventStdout, []string{"BAR"}, log.NewNopLogger())
+	metrics, err := eventsParse(mockEventStdout, &config.Target{Name: "test", Schedules: []string{"BAR"}}, false, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected err: %s", err.Error())
 		return
@@ -63,8 +66,48 @@ func TestEventsParseWithSchedules(t *testing.T) {
 	if len(metrics) != 1 {
 		t.Errorf("Expected 3 metrics, got %d", len(metrics))
 	}
-	if val := metrics[0].notstarted; val != 2 {
-		t.Errorf("Expected 2 notstarted, got %v", val)
+	if val := metrics["BAR"].notCompleted; val != 2 {
+		t.Errorf("Expected 2 notCompleted, got %v", val)
+	}
+}
+
+func TestEventsParseDurationCache(t *testing.T) {
+	metrics, err := eventsParse(mockEventStdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected err: %s", err.Error())
+		return
+	}
+	if len(metrics) != 2 {
+		t.Errorf("Expected 2 metrics, got %d", len(metrics))
+		return
+	}
+	if val := metrics["FOO"].notCompleted; val != 0 {
+		t.Errorf("Expected 0 notCompleted, got %v", val)
+	}
+	if val := metrics["FOO"].duration; val != 1891 {
+		t.Errorf("Expected 1891 duration, got %v", val)
+	}
+	stdout := `
+FOO,Not Started,,
+BAR,Completed,2020-03-22 05:09:44.000000,2020-03-22 05:41:14.000000
+`
+	metrics, err = eventsParse(stdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected err: %s", err.Error())
+		return
+	}
+	if len(metrics) != 2 {
+		t.Errorf("Expected 2 metrics, got %d", len(metrics))
+		return
+	}
+	if val := metrics["FOO"].notCompleted; val != 1 {
+		t.Errorf("Expected 0 notCompleted, got %v", val)
+	}
+	if val := metrics["FOO"].duration; val != 1891 {
+		t.Errorf("Expected 1891 duration, got %v", val)
+	}
+	if val := metrics["BAR"].duration; val != 1890 {
+		t.Errorf("Expected 1890 duration, got %v", val)
 	}
 }
 
@@ -72,6 +115,8 @@ func TestEventsCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
+	cache := false
+	useEventDurationCache = &cache
 	DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockEventStdout, nil
 	}
@@ -82,18 +127,22 @@ func TestEventsCollector(t *testing.T) {
     # HELP tsm_exporter_collect_timeout Indicates the collector timed out
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="events"} 0
-    # HELP tsm_schedule_notstarted Number of schedules not started for today
-    # TYPE tsm_schedule_notstarted gauge
-    tsm_schedule_notstarted{schedule="BAR"} 2
-    tsm_schedule_notstarted{schedule="FOO"} 0
+	# HELP tsm_schedule_duration_seconds Amount of time taken to complete scheduled event for today, in seconds
+	# TYPE tsm_schedule_duration_seconds gauge
+	tsm_schedule_duration_seconds{schedule="BAR"} 0
+	tsm_schedule_duration_seconds{schedule="FOO"} 1891
+    # HELP tsm_schedule_not_completed Number of scheduled events not completed for today
+    # TYPE tsm_schedule_not_completed gauge
+    tsm_schedule_not_completed{schedule="BAR"} 2
+    tsm_schedule_not_completed{schedule="FOO"} 0
 	`
 	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 5 {
-		t.Errorf("Unexpected collection count %d, expected 5", val)
+	if val := testutil.CollectAndCount(collector); val != 7 {
+		t.Errorf("Unexpected collection count %d, expected 7", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_schedule_notstarted",
+		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -120,7 +169,7 @@ func TestEventsCollectorError(t *testing.T) {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_schedule_notstarted",
+		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -147,7 +196,7 @@ func TestEventsCollectorTimeout(t *testing.T) {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_schedule_notstarted",
+		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -157,14 +206,20 @@ func TestEventsCollectorCache(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
+	cache := false
+	useEventDurationCache = &cache
 	DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockEventStdout, nil
 	}
 	expected := `
-    # HELP tsm_schedule_notstarted Number of schedules not started for today
-    # TYPE tsm_schedule_notstarted gauge
-    tsm_schedule_notstarted{schedule="BAR"} 2
-    tsm_schedule_notstarted{schedule="FOO"} 0
+	# HELP tsm_schedule_duration_seconds Amount of time taken to complete scheduled event for today, in seconds
+	# TYPE tsm_schedule_duration_seconds gauge
+	tsm_schedule_duration_seconds{schedule="BAR"} 0
+	tsm_schedule_duration_seconds{schedule="FOO"} 1891
+    # HELP tsm_schedule_not_completed Number of scheduled events not completed for today
+    # TYPE tsm_schedule_not_completed gauge
+    tsm_schedule_not_completed{schedule="BAR"} 2
+    tsm_schedule_not_completed{schedule="FOO"} 0
 	`
 	errorMetric := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
@@ -178,27 +233,27 @@ func TestEventsCollectorCache(t *testing.T) {
 	`
 	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger(), true)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 5 {
-		t.Errorf("Unexpected collection count %d, expected 5", val)
+	if val := testutil.CollectAndCount(collector); val != 7 {
+		t.Errorf("Unexpected collection count %d, expected 7", val)
 	}
 	DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	if val := testutil.CollectAndCount(collector); val != 5 {
-		t.Errorf("Unexpected collection count %d, expected 5", val)
+	if val := testutil.CollectAndCount(collector); val != 7 {
+		t.Errorf("Unexpected collection count %d, expected 7", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
-		"tsm_schedule_notstarted", "tsm_exporter_collect_error"); err != nil {
+		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds", "tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 	DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
-	if val := testutil.CollectAndCount(collector); val != 5 {
-		t.Errorf("Unexpected collection count %d, expected 5", val)
+	if val := testutil.CollectAndCount(collector); val != 7 {
+		t.Errorf("Unexpected collection count %d, expected 7", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),
-		"tsm_schedule_notstarted", "tsm_exporter_collect_timeout"); err != nil {
+		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

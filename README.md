@@ -26,7 +26,7 @@ log | Collect active log space metrics | Enabled
 db | Collect DB space information | Enabled
 libvolumes | Collect count of scratch tapes | Enabled
 drives | Collect count of offline drives | Enabled
-events | Collect number of not completed scheduled events from today | Enabled
+events | Collect event duration and number of not completed events | Enabled
 
 ## Configuration
 
