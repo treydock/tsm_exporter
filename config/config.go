@@ -15,7 +15,7 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sync"
 
 	yaml "gopkg.in/yaml.v3"
@@ -43,11 +43,14 @@ type Target struct {
 
 func (sc *SafeConfig) ReloadConfig(configFile string) error {
 	var c = &Config{}
-	yamlFile, err := ioutil.ReadFile(configFile)
+	yamlReader, err := os.Open(configFile)
 	if err != nil {
 		return fmt.Errorf("Error reading config file %s: %s", configFile, err)
 	}
-	if err := yaml.Unmarshal(yamlFile, c); err != nil {
+	defer yamlReader.Close()
+	decoder := yaml.NewDecoder(yamlReader)
+	decoder.KnownFields(true)
+	if err := decoder.Decode(c); err != nil {
 		return fmt.Errorf("Error parsing config file %s: %s", configFile, err)
 	}
 	for key := range c.Targets {

@@ -1,0 +1,5 @@
+targets:
+  tsm1.example.com:
+    id: somwell
+    password: secret
+    invalid_extra_field: foo
