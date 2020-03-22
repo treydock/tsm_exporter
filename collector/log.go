@@ -141,7 +141,6 @@ func (c *LogCollector) collect() (LogMetric, error) {
 func dsmadmcLog(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 	fields := getLogFields()
 	query := fmt.Sprintf("SELECT %s FROM log", strings.Join(fields, ","))
-	level.Debug(logger).Log("msg", fmt.Sprintf("query=%s", query))
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }

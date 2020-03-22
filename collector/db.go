@@ -199,7 +199,6 @@ func (c *DBCollector) collect() ([]DBMetric, error) {
 func dsmadmcDB(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 	fields := getDBFields()
 	query := fmt.Sprintf("SELECT %s FROM db", strings.Join(fields, ","))
-	level.Debug(logger).Log("msg", fmt.Sprintf("query=%s", query))
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }

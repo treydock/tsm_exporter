@@ -96,6 +96,7 @@ func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logg
 	servername := fmt.Sprintf("-SERVERName=%s", target.Servername)
 	id := fmt.Sprintf("-ID=%s", target.Id)
 	password := fmt.Sprintf("-PAssword=%s", target.Password)
+	level.Debug(logger).Log("msg", fmt.Sprintf("query=%s", query))
 	cmd := execCommand(ctx, "dsmadmc", servername, id, password, "-DATAONLY=YES", "-COMMAdelimited", query)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
