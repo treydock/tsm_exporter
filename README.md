@@ -26,6 +26,7 @@ log | Collect active log space metrics | Enabled
 db | Collect DB space information | Enabled
 libvolumes | Collect count of scratch tapes | Enabled
 drives | Collect count of offline drives | Enabled
+events | Collect number of not completed scheduled events from today | Enabled
 
 ## Configuration
 
@@ -37,6 +38,8 @@ targets:
     id: somwell
     password: secret
     library_name: TAPE
+    schedules:
+    - MYSQL
   tsm2.example.com:
     id: somwell
     password: secret
@@ -56,6 +59,8 @@ curl http://localhost:9310/tsm?target=tsm2.example.com
 The key for each target should match the `servername` value for the entry in `dsm.sys`.  You may optionally add the `servername` key to override the servername used when executing `dsmadmc`.
 
 The `libvolumes` and `drives` collectors can be limited to a specific library name via `library_name` config value, eg: `library_name: TAPE`.
+
+The `events` collector can be limited to specific schedules via the `schedules` config value.
 
 ## Dependencies
 

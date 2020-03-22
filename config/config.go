@@ -37,6 +37,7 @@ type Target struct {
 	Id          string   `yaml:"id"`
 	Password    string   `yaml:"password"`
 	LibraryName string   `yaml:"library_name"`
+	Schedules   []string `yaml:"schedules"`
 	Collectors  []string `yaml:"collectors,omitempty"`
 }
 
