@@ -186,15 +186,11 @@ func replicationviewsParse(out string, target *config.Target, useCache bool, log
 			f := s.FieldByName(field)
 			if f.Kind() == reflect.String {
 				f.SetString(values[i])
-			} else {
+			} else if f.Kind() == reflect.Float64 {
 				val, err := strconv.ParseFloat(values[i], 64)
 				if err != nil {
 					level.Error(logger).Log("msg", fmt.Sprintf("Error parsing %s value %s: %s", k, values[i], err.Error()))
 					continue
-				}
-				if strings.HasSuffix(k, "_MB") {
-					valBytes := val * 1024.0 * 1024.0
-					f.SetFloat(valBytes)
 				} else {
 					f.SetFloat(val)
 				}

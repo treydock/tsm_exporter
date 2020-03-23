@@ -114,6 +114,33 @@ COMPLETE,2020-03-23 00:06:08.000000,/srv,TEST2DB.DOMAIN,2020-03-23 00:05:24.0000
 	}
 }
 
+func TestReplicationHandleBadValues(t *testing.T) {
+	stdout := `
+COMPLETE,bad date,/TEST4,TEST2DB2,bad date,bad number,bad number
+`
+	metrics, err := replicationviewsParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected err: %s", err.Error())
+		return
+	}
+	if len(metrics) != 1 {
+		t.Errorf("Expected 1 metrics, got %d", len(metrics))
+		return
+	}
+	if val := metrics["TEST2DB2-/TEST2CONF"].NotCompleted; val != 0 {
+		t.Errorf("Expected 0 notCompleted, got %v", val)
+	}
+	if val := metrics["TEST2DB2-/TEST2CONF"].Duration; val != 0 {
+		t.Errorf("Expected no duration, got %v", val)
+	}
+	if val := metrics["TEST2DB2-/TEST2CONF"].ReplicatedBytes; val != 0 {
+		t.Errorf("Expected no ReplicatedBytes, got %v", val)
+	}
+	if val := metrics["TEST2DB2-/TEST2CONF"].ReplicatedFiles; val != 0 {
+		t.Errorf("Expected no ReplicatedFiles, got %v", val)
+	}
+}
+
 func TestReplicationViewsCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
