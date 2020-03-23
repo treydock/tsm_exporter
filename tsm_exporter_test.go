@@ -42,6 +42,20 @@ READONLY
 	mockedLogStdout     = "32426.00,32768.00,342.00\n"
 	mockLibVolumeStdout = "100\n"
 	mockDriveStdout     = "1\n"
+	mockEventStdout     = `
+FOO,Completed,2020-03-22 05:09:43.000000,2020-03-22 05:41:14.000000
+FOO,Future,,
+BAR,Not Started,,
+BAR,Not Started,,
+`
+	mockReplicationViewStdout = `
+COMPLETE,2020-03-23 06:06:45.000000,/TEST2CONF,TEST2DB2,2020-03-23 00:45:29.000000,167543418,2
+COMPLETE,2020-03-23 06:06:45.000000,/TEST4,TEST2DB2,2020-03-23 00:45:29.000000,1052637876956,2
+COMPLETE,2020-03-23 00:06:07.000000,/srv,TEST2DB.DOMAIN,2020-03-23 00:05:24.000000,245650752,10
+COMPLETE,2020-03-22 06:02:38.000000,/TEST2CONF,TEST2DB2,2020-03-22 00:45:29.000000,167543418,2
+COMPLETE,2020-03-22 06:02:38.000000,/TEST4,TEST2DB2,2020-03-22 00:45:29.000000,1052637876316,2
+COMPLETE,2020-03-22 00:05:57.000000,/srv,TEST2DB.DOMAIN,2020-03-22 00:05:23.000000,234680204,12
+`
 )
 
 func TestMain(m *testing.M) {
@@ -81,6 +95,12 @@ func TestMetricsHandler(t *testing.T) {
 	collector.DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockDriveStdout, nil
 	}
+	collector.DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockEventStdout, nil
+	}
+	collector.DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockReplicationViewStdout, nil
+	}
 	body, err := queryExporter("target=test1", http.StatusOK)
 	if err != nil {
 		t.Fatalf("Unexpected error GET /tsm: %s", err.Error())
@@ -105,6 +125,12 @@ func TestMetricsHandlerCollectorsDefined(t *testing.T) {
 	}
 	collector.DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockDriveStdout, nil
+	}
+	collector.DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockEventStdout, nil
+	}
+	collector.DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockReplicationViewStdout, nil
 	}
 	body, err := queryExporter("target=test2", http.StatusOK)
 	if err != nil {

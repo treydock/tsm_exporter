@@ -27,6 +27,7 @@ db | Collect DB space information | Enabled
 libvolumes | Collect count of scratch tapes | Enabled
 drives | Collect count of offline drives | Enabled
 events | Collect event duration and number of not completed events | Enabled
+replicationview | Collect metrics about replication | Enabled
 
 ## Configuration
 
@@ -40,6 +41,8 @@ targets:
     library_name: TAPE
     schedules:
     - MYSQL
+    replication_node_names:
+    - TESTDB
   tsm2.example.com:
     id: somwell
     password: secret
@@ -61,6 +64,8 @@ The key for each target should match the `servername` value for the entry in `ds
 The `libvolumes` and `drives` collectors can be limited to a specific library name via `library_name` config value, eg: `library_name: TAPE`.
 
 The `events` collector can be limited to specific schedules via the `schedules` config value.
+
+The `replicationview` collector can be limited to specific node names via the `replication_node_names` config vlaue.
 
 ## Dependencies
 

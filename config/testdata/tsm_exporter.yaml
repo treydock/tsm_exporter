@@ -1,4 +1,10 @@
 targets:
   tsm1.example.com:
+    servername: tsm1
     id: somwell
     password: secret
+    library_name: LIB1
+    schedules:
+      - DB1
+    replication_node_names:
+      - TEST1

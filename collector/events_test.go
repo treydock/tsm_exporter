@@ -64,7 +64,7 @@ func TestEventsParseWithSchedules(t *testing.T) {
 		return
 	}
 	if len(metrics) != 1 {
-		t.Errorf("Expected 3 metrics, got %d", len(metrics))
+		t.Errorf("Expected 1 metrics, got %d", len(metrics))
 	}
 	if val := metrics["BAR"].notCompleted; val != 2 {
 		t.Errorf("Expected 2 notCompleted, got %v", val)
@@ -101,7 +101,7 @@ BAR,Completed,2020-03-22 05:09:44.000000,2020-03-22 05:41:14.000000
 		return
 	}
 	if val := metrics["FOO"].notCompleted; val != 1 {
-		t.Errorf("Expected 0 notCompleted, got %v", val)
+		t.Errorf("Expected 1 notCompleted, got %v", val)
 	}
 	if val := metrics["FOO"].duration; val != 1891 {
 		t.Errorf("Expected 1891 duration, got %v", val)
