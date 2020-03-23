@@ -21,6 +21,7 @@ Collectors are enabled or disabled via a config file.
 
 Name | Description | Default
 -----|-------------|--------
+status | Collect status information about TSM | Enabled
 volumes | Collect count of unavailable or readonly volumes | Enabled
 log | Collect active log space metrics | Enabled
 db | Collect DB space information | Enabled
@@ -47,12 +48,13 @@ targets:
     id: somwell
     password: secret
     collectors:
+    - status
     - volumes
     - log
     - db
 ```
 
-This exporter could then be queried via one of these two commands below.  The `tsm2.example.com` target will only run the `volumes`, `log` and `db` collectors.
+This exporter could then be queried via one of these two commands below.  The `tsm2.example.com` target will only run the `status`, `volumes`, `log` and `db` collectors.
 
 ```
 curl http://localhost:9310/tsm?target=tsm1.example.com
