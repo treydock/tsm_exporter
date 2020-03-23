@@ -39,7 +39,7 @@ COMPLETE,2020-03-22 00:05:57.000000,/srv,TEST2DB.DOMAIN,2020-03-22 00:05:23.0000
 )
 
 func TestReplicationViewsParse(t *testing.T) {
-	metrics, err := replicationviewsParse(mockReplicationViewStdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
+	metrics, err := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected err: %s", err.Error())
 		return
@@ -60,7 +60,7 @@ func TestReplicationViewsParse(t *testing.T) {
 }
 
 func TestReplicationViewsParseWithNodeNames(t *testing.T) {
-	metrics, err := replicationviewsParse(mockReplicationViewStdout, &config.Target{Name: "test", ReplicationNodeNames: []string{"TEST2DB2"}}, false, log.NewNopLogger())
+	metrics, err := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test", ReplicationNodeNames: []string{"TEST2DB2"}}, false, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected err: %s", err.Error())
 		return
@@ -74,7 +74,7 @@ func TestReplicationViewsParseWithNodeNames(t *testing.T) {
 }
 
 func TestReplicationViewsParseDurationCache(t *testing.T) {
-	metrics, err := replicationviewsParse(mockReplicationViewStdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
+	metrics, err := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected err: %s", err.Error())
 		return
@@ -94,7 +94,7 @@ NOTCOMPLETE,2020-03-23 06:06:45.000000,/TEST2CONF,TEST2DB2,2020-03-23 00:45:29.0
 COMPLETE,2020-03-23 06:06:45.000000,/TEST4,TEST2DB2,2020-03-23 00:45:29.000000,1052637876956,2
 COMPLETE,2020-03-23 00:06:08.000000,/srv,TEST2DB.DOMAIN,2020-03-23 00:05:24.000000,245650752,10
 `
-	metrics, err = replicationviewsParse(stdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
+	metrics, err = replicationviewParse(stdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected err: %s", err.Error())
 		return
@@ -119,7 +119,7 @@ func TestReplicationHandleBadValues(t *testing.T) {
 COMPLETE,bad end date,/TEST4,TEST2DB2,2020-03-23 00:45:29.000000,1052637876956,bad number
 COMPLETE,2020-03-23 00:06:08.000000,/srv,TEST2DB.DOMAIN,bad start date,bad number,10
 `
-	metrics, err := replicationviewsParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
+	metrics, err := replicationviewParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected err: %s", err.Error())
 		return
@@ -157,10 +157,10 @@ func TestReplicationViewsCollector(t *testing.T) {
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="replicationviews"} 0
+    tsm_exporter_collect_error{collector="replicationview"} 0
     # HELP tsm_exporter_collect_timeout Indicates the collector timed out
     # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="replicationviews"} 0
+    tsm_exporter_collect_timeout{collector="replicationview"} 0
 	# HELP tsm_replication_duration_seconds Amount of time taken to complete the most recent replication
 	# TYPE tsm_replication_duration_seconds gauge
 	tsm_replication_duration_seconds{fsname="/TEST2CONF",nodename="TEST2DB2"} 19276
@@ -205,10 +205,10 @@ func TestReplicationViewsCollectorError(t *testing.T) {
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="replicationviews"} 1
+    tsm_exporter_collect_error{collector="replicationview"} 1
     # HELP tsm_exporter_collect_timeout Indicates the collector timed out
     # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="replicationviews"} 0
+    tsm_exporter_collect_timeout{collector="replicationview"} 0
 	`
 	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
@@ -233,10 +233,10 @@ func TestReplicationViewsCollectorTimeout(t *testing.T) {
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="replicationviews"} 0
+    tsm_exporter_collect_error{collector="replicationview"} 0
     # HELP tsm_exporter_collect_timeout Indicates the collector timed out
     # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="replicationviews"} 1
+    tsm_exporter_collect_timeout{collector="replicationview"} 1
 	`
 	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
@@ -285,12 +285,12 @@ func TestReplicationViewsCollectorCache(t *testing.T) {
 	errorMetric := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="replicationviews"} 1
+    tsm_exporter_collect_error{collector="replicationview"} 1
 	`
 	timeoutMetric := `
     # HELP tsm_exporter_collect_timeout Indicates the collector timed out
     # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="replicationviews"} 1
+    tsm_exporter_collect_timeout{collector="replicationview"} 1
 	`
 	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger(), true)
 	gatherers := setupGatherer(collector)

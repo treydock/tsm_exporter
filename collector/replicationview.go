@@ -31,14 +31,14 @@ import (
 )
 
 var (
-	replicationviewsTimeout          = kingpin.Flag("collector.replicationviews.timeout", "Timeout for collecting replicationviews information").Default("5").Int()
-	useReplicationViewMetricCache    = kingpin.Flag("collector.replicationviews.metric-cache", "Cache replicationview metrics from last completed replication").Default("true").Bool()
-	DsmadmcReplicationViewsExec      = dsmadmcReplicationViews
-	replicationviewsCache            = map[string]map[string]ReplicationViewMetric{}
-	replicationviewsCacheMutex       = sync.RWMutex{}
-	replicationviewsMetricCache      = map[string]ReplicationViewMetric{}
-	replicationviewsMetricCacheMutex = sync.RWMutex{}
-	replMap                          = map[string]string{
+	replicationviewTimeout          = kingpin.Flag("collector.replicationview.timeout", "Timeout for collecting replicationview information").Default("5").Int()
+	useReplicationViewMetricCache   = kingpin.Flag("collector.replicationview.metric-cache", "Cache replicationview metrics from last completed replication").Default("true").Bool()
+	DsmadmcReplicationViewsExec     = dsmadmcReplicationViews
+	replicationviewCache            = map[string]map[string]ReplicationViewMetric{}
+	replicationviewCacheMutex       = sync.RWMutex{}
+	replicationviewMetricCache      = map[string]ReplicationViewMetric{}
+	replicationviewMetricCacheMutex = sync.RWMutex{}
+	replMap                         = map[string]string{
 		"START_TIME":          "StartTime",
 		"END_TIME":            "EndTime",
 		"NODE_NAME":           "NodeName",
@@ -76,7 +76,7 @@ type ReplicationViewsCollector struct {
 }
 
 func init() {
-	registerCollector("replicationviews", true, NewReplicationViewsExporter)
+	registerCollector("replicationview", true, NewReplicationViewsExporter)
 }
 
 func NewReplicationViewsExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
@@ -109,7 +109,7 @@ func (c *ReplicationViewsCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting replicationviews metrics")
+	level.Debug(c.logger).Log("msg", "Collecting replicationview metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -131,39 +131,39 @@ func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(c.ReplicatedFiles, prometheus.GaugeValue, m.ReplicatedFiles, m.NodeName, m.FsName)
 	}
 
-	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "replicationviews")
-	ch <- prometheus.MustNewConstMetric(collecTimeout, prometheus.GaugeValue, float64(timeout), "replicationviews")
-	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "replicationviews")
+	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "replicationview")
+	ch <- prometheus.MustNewConstMetric(collecTimeout, prometheus.GaugeValue, float64(timeout), "replicationview")
+	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "replicationview")
 }
 
 func (c *ReplicationViewsCollector) collect() (map[string]ReplicationViewMetric, error) {
 	var err error
 	var out string
 	metrics := make(map[string]ReplicationViewMetric)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*replicationviewsTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*replicationviewTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcReplicationViewsExec(c.target, ctx, c.logger)
 	if ctx.Err() == context.DeadlineExceeded {
 		if c.useCache {
-			metrics = replicationviewsReadCache(c.target.Name)
+			metrics = replicationviewReadCache(c.target.Name)
 		}
 		return metrics, ctx.Err()
 	}
 	if err != nil {
 		if c.useCache {
-			metrics = replicationviewsReadCache(c.target.Name)
+			metrics = replicationviewReadCache(c.target.Name)
 		}
 		return metrics, err
 	}
-	metrics, err = replicationviewsParse(out, c.target, *useReplicationViewMetricCache, c.logger)
+	metrics, err = replicationviewParse(out, c.target, *useReplicationViewMetricCache, c.logger)
 	if err != nil {
 		if c.useCache {
-			metrics = replicationviewsReadCache(c.target.Name)
+			metrics = replicationviewReadCache(c.target.Name)
 		}
 		return metrics, err
 	}
 	if c.useCache {
-		replicationviewsWriteCache(c.target.Name, metrics)
+		replicationviewWriteCache(c.target.Name, metrics)
 	}
 	return metrics, nil
 }
@@ -180,7 +180,7 @@ func dsmadmcReplicationViews(target *config.Target, ctx context.Context, logger 
 	return out, err
 }
 
-func replicationviewsParse(out string, target *config.Target, useCache bool, logger log.Logger) (map[string]ReplicationViewMetric, error) {
+func replicationviewParse(out string, target *config.Target, useCache bool, logger log.Logger) (map[string]ReplicationViewMetric, error) {
 	metrics := make(map[string]ReplicationViewMetric)
 	fields := getReplFields()
 	timeFormat := "2006-01-02 15:04:05.000000"
@@ -223,15 +223,15 @@ func replicationviewsParse(out string, target *config.Target, useCache bool, log
 		if metric.CompState != "COMPLETE" {
 			metric.NotCompleted++
 			if useCache {
-				replicationviewsMetricCacheMutex.RLock()
-				if d, ok := replicationviewsMetricCache[cacheKey]; ok {
+				replicationviewMetricCacheMutex.RLock()
+				if d, ok := replicationviewMetricCache[cacheKey]; ok {
 					metric.Duration = d.Duration
 					metric.StartTimestamp = d.StartTimestamp
 					metric.EndTimestamp = d.EndTimestamp
 					metric.ReplicatedBytes = d.ReplicatedBytes
 					metric.ReplicatedFiles = d.ReplicatedFiles
 				}
-				replicationviewsMetricCacheMutex.RUnlock()
+				replicationviewMetricCacheMutex.RUnlock()
 			}
 		} else {
 			start_time, err := time.Parse(timeFormat, metric.StartTime)
@@ -251,9 +251,9 @@ func replicationviewsParse(out string, target *config.Target, useCache bool, log
 			duration := end_time.Sub(start_time).Seconds()
 			metric.Duration = duration
 			if useCache {
-				replicationviewsMetricCacheMutex.Lock()
-				replicationviewsMetricCache[cacheKey] = metric
-				replicationviewsMetricCacheMutex.Unlock()
+				replicationviewMetricCacheMutex.Lock()
+				replicationviewMetricCache[cacheKey] = metric
+				replicationviewMetricCacheMutex.Unlock()
 			}
 		}
 		metrics[key] = metric
@@ -270,18 +270,18 @@ func getReplFields() []string {
 	return fields
 }
 
-func replicationviewsReadCache(target string) map[string]ReplicationViewMetric {
+func replicationviewReadCache(target string) map[string]ReplicationViewMetric {
 	metrics := make(map[string]ReplicationViewMetric)
-	replicationviewsCacheMutex.RLock()
-	if cache, ok := replicationviewsCache[target]; ok {
+	replicationviewCacheMutex.RLock()
+	if cache, ok := replicationviewCache[target]; ok {
 		metrics = cache
 	}
-	replicationviewsCacheMutex.RUnlock()
+	replicationviewCacheMutex.RUnlock()
 	return metrics
 }
 
-func replicationviewsWriteCache(target string, metrics map[string]ReplicationViewMetric) {
-	replicationviewsCacheMutex.Lock()
-	replicationviewsCache[target] = metrics
-	replicationviewsCacheMutex.Unlock()
+func replicationviewWriteCache(target string, metrics map[string]ReplicationViewMetric) {
+	replicationviewCacheMutex.Lock()
+	replicationviewCache[target] = metrics
+	replicationviewCacheMutex.Unlock()
 }
