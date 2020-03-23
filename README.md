@@ -71,7 +71,7 @@ The `replicationview` collector can be limited to specific node names via the `r
 
 ## Dependencies
 
-This exporter relies on the `dsmadmc` command. The host running the exporter is expected to have both the `dsmadmc` executable and `/opt/tivoli/tsm/client/ba/bin/dsm.sys`.
+This exporter relies on the `dsmadmc` command. The host running the exporter is expected to have both the `dsmadmc` executable and files `/opt/tivoli/tsm/client/ba/bin/dsm.sys` and `/opt/tivoli/tsm/client/ba/bin/dsm.opt`.
 
 The hosts being queried by this exporter must exist in `/opt/tivoli/tsm/client/ba/bin/dsm.sys`.
 
