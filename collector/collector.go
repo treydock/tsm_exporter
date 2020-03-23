@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -33,6 +34,7 @@ const (
 
 var (
 	exporterUseCache = kingpin.Flag("exporter.use-cache", "Use cached metrics if commands timeout or produce errors").Default("false").Bool()
+	dsmLogDir        = kingpin.Flag("path.dsm_log.dir", "Directory to use for DSM_LOG environment variable").Default("/tmp").String()
 	execCommand      = exec.CommandContext
 	collectorState   = make(map[string]bool)
 	factories        = make(map[string]func(target *config.Target, logger log.Logger, useCache bool) Collector)
@@ -98,6 +100,7 @@ func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logg
 	password := fmt.Sprintf("-PAssword=%s", target.Password)
 	level.Debug(logger).Log("msg", fmt.Sprintf("query=%s", query))
 	cmd := execCommand(ctx, "dsmadmc", servername, id, password, "-DATAONLY=YES", "-COMMAdelimited", query)
+	os.Setenv("DSM_LOG", *dsmLogDir)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
