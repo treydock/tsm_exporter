@@ -31,14 +31,14 @@ import (
 )
 
 var (
-	replicationviewsTimeout            = kingpin.Flag("collector.replicationviews.timeout", "Timeout for collecting replicationviews information").Default("5").Int()
-	useReplicationViewDurationCache    = kingpin.Flag("collector.replicationviews.duration-cache", "Cache replicationview durations").Default("true").Bool()
-	DsmadmcReplicationViewsExec        = dsmadmcReplicationViews
-	replicationviewsCache              = map[string]map[string]ReplicationViewMetric{}
-	replicationviewsCacheMutex         = sync.RWMutex{}
-	replicationviewsDurationCache      = map[string]float64{}
-	replicationviewsDurationCacheMutex = sync.RWMutex{}
-	replMap                            = map[string]string{
+	replicationviewsTimeout          = kingpin.Flag("collector.replicationviews.timeout", "Timeout for collecting replicationviews information").Default("5").Int()
+	useReplicationViewMetricCache    = kingpin.Flag("collector.replicationviews.metric-cache", "Cache replicationview metrics from last completed replication").Default("true").Bool()
+	DsmadmcReplicationViewsExec      = dsmadmcReplicationViews
+	replicationviewsCache            = map[string]map[string]ReplicationViewMetric{}
+	replicationviewsCacheMutex       = sync.RWMutex{}
+	replicationviewsMetricCache      = map[string]ReplicationViewMetric{}
+	replicationviewsMetricCacheMutex = sync.RWMutex{}
+	replMap                          = map[string]string{
 		"START_TIME":          "StartTime",
 		"END_TIME":            "EndTime",
 		"NODE_NAME":           "NodeName",
@@ -55,6 +55,8 @@ type ReplicationViewMetric struct {
 	StartTime       string
 	EndTime         string
 	CompState       string
+	StartTimestamp  float64
+	EndTimestamp    float64
 	NotCompleted    float64
 	Duration        float64
 	ReplicatedBytes float64
@@ -63,6 +65,8 @@ type ReplicationViewMetric struct {
 
 type ReplicationViewsCollector struct {
 	NotCompleted    *prometheus.Desc
+	StartTime       *prometheus.Desc
+	EndTime         *prometheus.Desc
 	Duration        *prometheus.Desc
 	ReplicatedBytes *prometheus.Desc
 	ReplicatedFiles *prometheus.Desc
@@ -79,6 +83,10 @@ func NewReplicationViewsExporter(target *config.Target, logger log.Logger, useCa
 	return &ReplicationViewsCollector{
 		NotCompleted: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "not_completed"),
 			"Number of replications not completed for today", []string{"nodename", "fsname"}, nil),
+		StartTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "start_time"),
+			"Start time of replication", []string{"nodename", "fsname"}, nil),
+		EndTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "end_time"),
+			"End time of replication", []string{"nodename", "fsname"}, nil),
 		Duration: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "duration_seconds"),
 			"Amount of time taken to complete the most recent replication", []string{"nodename", "fsname"}, nil),
 		ReplicatedBytes: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "replicated_bytes"),
@@ -93,6 +101,8 @@ func NewReplicationViewsExporter(target *config.Target, logger log.Logger, useCa
 
 func (c *ReplicationViewsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.NotCompleted
+	ch <- c.StartTime
+	ch <- c.EndTime
 	ch <- c.Duration
 	ch <- c.ReplicatedBytes
 	ch <- c.ReplicatedFiles
@@ -114,6 +124,8 @@ func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for _, m := range metrics {
 		ch <- prometheus.MustNewConstMetric(c.NotCompleted, prometheus.GaugeValue, m.NotCompleted, m.NodeName, m.FsName)
+		ch <- prometheus.MustNewConstMetric(c.StartTime, prometheus.GaugeValue, m.StartTimestamp, m.NodeName, m.FsName)
+		ch <- prometheus.MustNewConstMetric(c.EndTime, prometheus.GaugeValue, m.EndTimestamp, m.NodeName, m.FsName)
 		ch <- prometheus.MustNewConstMetric(c.Duration, prometheus.GaugeValue, m.Duration, m.NodeName, m.FsName)
 		ch <- prometheus.MustNewConstMetric(c.ReplicatedBytes, prometheus.GaugeValue, m.ReplicatedBytes, m.NodeName, m.FsName)
 		ch <- prometheus.MustNewConstMetric(c.ReplicatedFiles, prometheus.GaugeValue, m.ReplicatedFiles, m.NodeName, m.FsName)
@@ -143,7 +155,7 @@ func (c *ReplicationViewsCollector) collect() (map[string]ReplicationViewMetric,
 		}
 		return metrics, err
 	}
-	metrics, err = replicationviewsParse(out, c.target, *useReplicationViewDurationCache, c.logger)
+	metrics, err = replicationviewsParse(out, c.target, *useReplicationViewMetricCache, c.logger)
 	if err != nil {
 		if c.useCache {
 			metrics = replicationviewsReadCache(c.target.Name)
@@ -207,33 +219,41 @@ func replicationviewsParse(out string, target *config.Target, useCache bool, log
 		}
 	}
 	for key, metric := range metrics {
-		durationCacheKey := fmt.Sprintf("%s-%s", target.Name, key)
+		cacheKey := fmt.Sprintf("%s-%s", target.Name, key)
 		if metric.CompState != "COMPLETE" {
 			metric.NotCompleted++
 			if useCache {
-				replicationviewsDurationCacheMutex.RLock()
-				if d, ok := replicationviewsDurationCache[durationCacheKey]; ok {
-					metric.Duration = d
+				replicationviewsMetricCacheMutex.RLock()
+				if d, ok := replicationviewsMetricCache[cacheKey]; ok {
+					metric.Duration = d.Duration
+					metric.StartTimestamp = d.StartTimestamp
+					metric.EndTimestamp = d.EndTimestamp
+					metric.ReplicatedBytes = d.ReplicatedBytes
+					metric.ReplicatedFiles = d.ReplicatedFiles
 				}
-				replicationviewsDurationCacheMutex.RUnlock()
+				replicationviewsMetricCacheMutex.RUnlock()
 			}
 		} else {
 			start_time, err := time.Parse(timeFormat, metric.StartTime)
 			if err != nil {
 				level.Error(logger).Log("msg", fmt.Sprintf("Failed to parse START_TIME '%v': %s", metric.StartTime, err.Error()))
 				continue
+			} else {
+				metric.StartTimestamp = float64(start_time.Unix())
 			}
 			end_time, err := time.Parse(timeFormat, metric.EndTime)
 			if err != nil {
 				level.Error(logger).Log("msg", fmt.Sprintf("Failed to parse END_TIME '%v': %s", metric.EndTime, err.Error()))
 				continue
+			} else {
+				metric.EndTimestamp = float64(end_time.Unix())
 			}
 			duration := end_time.Sub(start_time).Seconds()
 			metric.Duration = duration
 			if useCache {
-				replicationviewsDurationCacheMutex.Lock()
-				replicationviewsDurationCache[durationCacheKey] = metric.Duration
-				replicationviewsDurationCacheMutex.Unlock()
+				replicationviewsMetricCacheMutex.Lock()
+				replicationviewsMetricCache[cacheKey] = metric
+				replicationviewsMetricCacheMutex.Unlock()
 			}
 		}
 		metrics[key] = metric

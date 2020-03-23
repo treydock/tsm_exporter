@@ -150,7 +150,7 @@ func TestReplicationViewsCollector(t *testing.T) {
 		t.Fatal(err)
 	}
 	cache := false
-	useReplicationViewDurationCache = &cache
+	useReplicationViewMetricCache = &cache
 	DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockReplicationViewStdout, nil
 	}
@@ -184,8 +184,8 @@ func TestReplicationViewsCollector(t *testing.T) {
 	`
 	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
+	if val := testutil.CollectAndCount(collector); val != 21 {
+		t.Errorf("Unexpected collection count %d, expected 21", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
@@ -256,7 +256,7 @@ func TestReplicationViewsCollectorCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	cache := false
-	useReplicationViewDurationCache = &cache
+	useReplicationViewMetricCache = &cache
 	DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockReplicationViewStdout, nil
 	}
@@ -294,14 +294,14 @@ func TestReplicationViewsCollectorCache(t *testing.T) {
 	`
 	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger(), true)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
+	if val := testutil.CollectAndCount(collector); val != 21 {
+		t.Errorf("Unexpected collection count %d, expected 21", val)
 	}
 	DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	if val := testutil.CollectAndCount(collector); val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
+	if val := testutil.CollectAndCount(collector); val != 21 {
+		t.Errorf("Unexpected collection count %d, expected 21", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
 		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
@@ -312,8 +312,8 @@ func TestReplicationViewsCollectorCache(t *testing.T) {
 	DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
-	if val := testutil.CollectAndCount(collector); val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
+	if val := testutil.CollectAndCount(collector); val != 21 {
+		t.Errorf("Unexpected collection count %d, expected 21", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),
 		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
