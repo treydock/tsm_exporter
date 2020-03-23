@@ -220,12 +220,12 @@ func replicationviewsParse(out string, target *config.Target, useCache bool, log
 		} else {
 			start_time, err := time.Parse(timeFormat, metric.StartTime)
 			if err != nil {
-				level.Error(logger).Log("msg", fmt.Sprintf("Failed to parse actual_start time '%v': %s", metric.StartTime, err.Error()))
+				level.Error(logger).Log("msg", fmt.Sprintf("Failed to parse START_TIME '%v': %s", metric.StartTime, err.Error()))
 				continue
 			}
 			end_time, err := time.Parse(timeFormat, metric.EndTime)
 			if err != nil {
-				level.Error(logger).Log("msg", fmt.Sprintf("Failed to parse completed time '%v': %s", metric.EndTime, err.Error()))
+				level.Error(logger).Log("msg", fmt.Sprintf("Failed to parse END_TIME '%v': %s", metric.EndTime, err.Error()))
 				continue
 			}
 			duration := end_time.Sub(start_time).Seconds()

@@ -116,27 +116,31 @@ COMPLETE,2020-03-23 00:06:08.000000,/srv,TEST2DB.DOMAIN,2020-03-23 00:05:24.0000
 
 func TestReplicationHandleBadValues(t *testing.T) {
 	stdout := `
-COMPLETE,bad date,/TEST4,TEST2DB2,bad date,bad number,bad number
+COMPLETE,bad end date,/TEST4,TEST2DB2,2020-03-23 00:45:29.000000,1052637876956,bad number
+COMPLETE,2020-03-23 00:06:08.000000,/srv,TEST2DB.DOMAIN,bad start date,bad number,10
 `
 	metrics, err := replicationviewsParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected err: %s", err.Error())
 		return
 	}
-	if len(metrics) != 1 {
-		t.Errorf("Expected 1 metrics, got %d", len(metrics))
+	if len(metrics) != 2 {
+		t.Errorf("Expected 2 metrics, got %d", len(metrics))
 		return
 	}
-	if val := metrics["TEST2DB2-/TEST2CONF"].NotCompleted; val != 0 {
+	if val := metrics["TEST2DB2-/TEST4"].NotCompleted; val != 0 {
 		t.Errorf("Expected 0 notCompleted, got %v", val)
 	}
-	if val := metrics["TEST2DB2-/TEST2CONF"].Duration; val != 0 {
+	if val := metrics["TEST2DB2-/TEST4"].Duration; val != 0 {
 		t.Errorf("Expected no duration, got %v", val)
 	}
-	if val := metrics["TEST2DB2-/TEST2CONF"].ReplicatedBytes; val != 0 {
+	if val := metrics["TEST2DB.DOMAIN-/srv"].Duration; val != 0 {
+		t.Errorf("Expected no duration, got %v", val)
+	}
+	if val := metrics["TEST2DB.DOMAIN-/srv"].ReplicatedBytes; val != 0 {
 		t.Errorf("Expected no ReplicatedBytes, got %v", val)
 	}
-	if val := metrics["TEST2DB2-/TEST2CONF"].ReplicatedFiles; val != 0 {
+	if val := metrics["TEST2DB2-/TEST4"].ReplicatedFiles; val != 0 {
 		t.Errorf("Expected no ReplicatedFiles, got %v", val)
 	}
 }
