@@ -1,3 +1,7 @@
+## 0.3.0 / 2020-03-25
+
+* Refactor drives collector to expose a metric per drive
+
 ## 0.2.2 / 2020-03-25
 
 * Fix issue where replication endtime and duration would be negative
