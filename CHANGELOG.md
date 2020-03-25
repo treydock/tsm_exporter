@@ -1,3 +1,7 @@
+## 0.2.2 / 2020-03-25
+
+* Fix issue where replication endtime and duration would be negative
+
 ## 0.2.1 / 2020-03-25
 
 * Ensure multiple non completed replications are counted
