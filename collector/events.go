@@ -129,24 +129,11 @@ func (c *EventsCollector) collect() (map[string]EventMetric, error) {
 }
 
 func dsmadmcEvents(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	//statusCond := []string{"status<>'Completed'", "status<>'Future'", "status<>'Started'", "status<>'In Progress'", "status<>'Pending'"}
-	//statusCond := []string{"status<>'Completed'"}
 	query := "SELECT schedule_name,status,actual_start,completed FROM events "
-	//statusQuery := strings.Join(statusCond, " AND ")
-	//query = query + statusQuery
 	now := time.Now().Local()
 	today := now.Format("2006-01-02")
 	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
 	query = query + fmt.Sprintf(" WHERE DATE(scheduled_start) BETWEEN '%s' AND '%s'", yesterday, today)
-	/*if target.Schedules != nil {
-		var scheduleNames []string
-		for _, sched := range target.Schedules {
-			s := fmt.Sprintf("schedule_name='%s'", sched)
-			scheduleNames = append(scheduleNames, s)
-		}
-		scheduleQuery := strings.Join(scheduleNames, " OR ")
-		query = query + fmt.Sprintf(" AND (%s)", scheduleQuery)
-	}*/
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
