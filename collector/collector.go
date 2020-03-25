@@ -95,6 +95,14 @@ func sliceContains(slice []string, str string) bool {
 	return false
 }
 
+func boolToFloat64(data bool) float64 {
+	if data {
+		return float64(1)
+	} else {
+		return float64(0)
+	}
+}
+
 func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logger log.Logger) (string, error) {
 	servername := fmt.Sprintf("-SERVERName=%s", target.Servername)
 	id := fmt.Sprintf("-ID=%s", target.Id)
