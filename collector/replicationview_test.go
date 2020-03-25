@@ -59,6 +59,29 @@ func TestReplicationViewsParse(t *testing.T) {
 	}
 }
 
+func TestReplicationViewsParseMultipleNotCompleted(t *testing.T) {
+	stdout := `
+NOT COMPLETED,2020-03-23 06:06:45.000000,/TEST2CONF,TEST2DB2,2020-03-23 00:45:29.000000,167543418,2
+COMPLETE,2020-03-23 06:06:45.000000,/TEST4,TEST2DB2,2020-03-23 00:45:29.000000,1052637876956,2
+COMPLETE,2020-03-23 00:06:07.000000,/srv,TEST2DB.DOMAIN,2020-03-23 00:05:24.000000,245650752,10
+NOT COMPLETED,2020-03-22 06:02:38.000000,/TEST2CONF,TEST2DB2,2020-03-22 00:45:29.000000,167543418,2
+COMPLETE,2020-03-22 06:02:38.000000,/TEST4,TEST2DB2,2020-03-22 00:45:29.000000,1052637876316,2
+COMPLETE,2020-03-22 00:05:57.000000,/srv,TEST2DB.DOMAIN,2020-03-22 00:05:23.000000,234680204,12
+`
+	metrics, err := replicationviewParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected err: %s", err.Error())
+		return
+	}
+	if len(metrics) != 3 {
+		t.Errorf("Expected 3 metrics, got %d", len(metrics))
+		return
+	}
+	if val := metrics["TEST2DB2-/TEST2CONF"].NotCompleted; val != 2 {
+		t.Errorf("Expected 2 notCompleted, got %v", val)
+	}
+}
+
 func TestReplicationViewsParseWithNodeNames(t *testing.T) {
 	metrics, err := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test", ReplicationNodeNames: []string{"TEST2DB2"}}, false, log.NewNopLogger())
 	if err != nil {

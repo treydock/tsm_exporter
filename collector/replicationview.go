@@ -182,6 +182,7 @@ func dsmadmcReplicationViews(target *config.Target, ctx context.Context, logger 
 
 func replicationviewParse(out string, target *config.Target, useCache bool, logger log.Logger) (map[string]ReplicationViewMetric, error) {
 	metrics := make(map[string]ReplicationViewMetric)
+	notCompleted := make(map[string]float64)
 	fields := getReplFields()
 	timeFormat := "2006-01-02 15:04:05.000000"
 	lines := strings.Split(out, "\n")
@@ -212,6 +213,9 @@ func replicationviewParse(out string, target *config.Target, useCache bool, logg
 			continue
 		}
 		key := fmt.Sprintf("%s-%s", metric.NodeName, metric.FsName)
+		if metric.CompState != "COMPLETE" {
+			notCompleted[key]++
+		}
 		if _, ok := metrics[key]; ok {
 			continue
 		} else {
@@ -220,8 +224,10 @@ func replicationviewParse(out string, target *config.Target, useCache bool, logg
 	}
 	for key, metric := range metrics {
 		cacheKey := fmt.Sprintf("%s-%s", target.Name, key)
+		if val, ok := notCompleted[key]; ok {
+			metric.NotCompleted = val
+		}
 		if metric.CompState != "COMPLETE" {
-			metric.NotCompleted++
 			if useCache {
 				replicationviewMetricCacheMutex.RLock()
 				if d, ok := replicationviewMetricCache[cacheKey]; ok {
