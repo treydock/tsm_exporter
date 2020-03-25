@@ -28,7 +28,12 @@ import (
 )
 
 var (
-	mockDriveStdout = "1\n"
+	mockDriveStdout = `
+LIB1,TAPE10,YES
+LIB1,TAPE11,YES
+LIBENC,TAPE00,YES
+LIBENC,TAPE01,NO
+`
 )
 
 func TestDrivesParse(t *testing.T) {
@@ -37,8 +42,11 @@ func TestDrivesParse(t *testing.T) {
 		t.Errorf("Unexpected err: %s", err.Error())
 		return
 	}
-	if metrics.offline != 1 {
-		t.Errorf("Expected 1 offline, got %v", metrics.offline)
+	if len(metrics) != 4 {
+		t.Errorf("Expected 4 metrics, got %d", len(metrics))
+	}
+	if metrics[0].online != true {
+		t.Errorf("Expected online, got %v", metrics[0].online)
 	}
 }
 
@@ -50,9 +58,12 @@ func TestDrivesCollector(t *testing.T) {
 		return mockDriveStdout, nil
 	}
 	expected := `
-    # HELP tsm_drives_offline Number of drives not online
-    # TYPE tsm_drives_offline gauge
-    tsm_drives_offline 1
+    # HELP tsm_drive_online Inidicates if the drive is online, 1=online, 0=offline
+    # TYPE tsm_drive_online gauge
+    tsm_drive_online{library="LIB1",name="TAPE10"} 1
+    tsm_drive_online{library="LIB1",name="TAPE11"} 1
+    tsm_drive_online{library="LIBENC",name="TAPE00"} 1
+    tsm_drive_online{library="LIBENC",name="TAPE01"} 0
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="drives"} 0
@@ -62,11 +73,11 @@ func TestDrivesCollector(t *testing.T) {
 	`
 	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 4 {
-		t.Errorf("Unexpected collection count %d, expected 4", val)
+	if val := testutil.CollectAndCount(collector); val != 7 {
+		t.Errorf("Unexpected collection count %d, expected 7", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_drives_offline",
+		"tsm_drive_online",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -93,7 +104,7 @@ func TestDrivesCollectorError(t *testing.T) {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_drives_offline",
+		"tsm_drive_online",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -120,7 +131,7 @@ func TestDrivesCollectorTimeout(t *testing.T) {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_drives_offline",
+		"tsm_drive_online",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -134,9 +145,12 @@ func TestDrivesCollectorCache(t *testing.T) {
 		return mockDriveStdout, nil
 	}
 	expected := `
-    # HELP tsm_drives_offline Number of drives not online
-    # TYPE tsm_drives_offline gauge
-    tsm_drives_offline 1
+    # HELP tsm_drive_online Inidicates if the drive is online, 1=online, 0=offline
+    # TYPE tsm_drive_online gauge
+    tsm_drive_online{library="LIB1",name="TAPE10"} 1
+    tsm_drive_online{library="LIB1",name="TAPE11"} 1
+    tsm_drive_online{library="LIBENC",name="TAPE00"} 1
+    tsm_drive_online{library="LIBENC",name="TAPE01"} 0
 	`
 	errorMetric := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
@@ -150,27 +164,27 @@ func TestDrivesCollectorCache(t *testing.T) {
 	`
 	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger(), true)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 4 {
-		t.Errorf("Unexpected collection count %d, expected 4", val)
+	if val := testutil.CollectAndCount(collector); val != 7 {
+		t.Errorf("Unexpected collection count %d, expected 7", val)
 	}
 	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	if val := testutil.CollectAndCount(collector); val != 4 {
-		t.Errorf("Unexpected collection count %d, expected 4", val)
+	if val := testutil.CollectAndCount(collector); val != 7 {
+		t.Errorf("Unexpected collection count %d, expected 7", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected+errorMetric),
-		"tsm_drives_offline", "tsm_exporter_collect_error"); err != nil {
+		"tsm_drive_online", "tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
-	if val := testutil.CollectAndCount(collector); val != 4 {
-		t.Errorf("Unexpected collection count %d, expected 4", val)
+	if val := testutil.CollectAndCount(collector); val != 7 {
+		t.Errorf("Unexpected collection count %d, expected 7", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected+timeoutMetric),
-		"tsm_drives_offline", "tsm_exporter_collect_timeout"); err != nil {
+		"tsm_drive_online", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

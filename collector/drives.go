@@ -16,7 +16,6 @@ package collector
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,16 +30,18 @@ import (
 var (
 	drivesTimeout     = kingpin.Flag("collector.drives.timeout", "Timeout for collecting drives information").Default("5").Int()
 	DsmadmcDrivesExec = dsmadmcDrives
-	drivesCache       = map[string]DriveMetric{}
+	drivesCache       = map[string][]DriveMetric{}
 	drivesCacheMutex  = sync.RWMutex{}
 )
 
 type DriveMetric struct {
-	offline float64
+	library string
+	name    string
+	online  bool
 }
 
 type DrivesCollector struct {
-	offline  *prometheus.Desc
+	online   *prometheus.Desc
 	target   *config.Target
 	logger   log.Logger
 	useCache bool
@@ -52,8 +53,8 @@ func init() {
 
 func NewDrivesExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
 	return &DrivesCollector{
-		offline: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drives", "offline"),
-			"Number of drives not online", nil, nil),
+		online: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drive", "online"),
+			"Inidicates if the drive is online, 1=online, 0=offline", []string{"library", "name"}, nil),
 		target:   target,
 		logger:   logger,
 		useCache: useCache,
@@ -61,7 +62,7 @@ func NewDrivesExporter(target *config.Target, logger log.Logger, useCache bool) 
 }
 
 func (c *DrivesCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.offline
+	ch <- c.online
 }
 
 func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
@@ -78,8 +79,8 @@ func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
 		errorMetric = 1
 	}
 
-	if err == nil || c.useCache {
-		ch <- prometheus.MustNewConstMetric(c.offline, prometheus.GaugeValue, metrics.offline)
+	for _, m := range metrics {
+		ch <- prometheus.MustNewConstMetric(c.online, prometheus.GaugeValue, boolToFloat64(m.online), m.library, m.name)
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "drives")
@@ -87,10 +88,10 @@ func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "drives")
 }
 
-func (c *DrivesCollector) collect() (DriveMetric, error) {
+func (c *DrivesCollector) collect() ([]DriveMetric, error) {
 	var err error
 	var out string
-	var metrics DriveMetric
+	var metrics []DriveMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*drivesTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcDrivesExec(c.target, ctx, c.logger)
@@ -120,30 +121,38 @@ func (c *DrivesCollector) collect() (DriveMetric, error) {
 }
 
 func dsmadmcDrives(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	query := "SELECT count(*) FROM drives WHERE NOT online='YES'"
+	query := "SELECT library_name,drive_name,online FROM drives"
 	if target.LibraryName != "" {
-		query = query + fmt.Sprintf(" AND library_name='%s'", target.LibraryName)
+		query = query + fmt.Sprintf(" WHERE library_name='%s'", target.LibraryName)
 	}
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 
-func drivesParse(out string, logger log.Logger) (DriveMetric, error) {
-	var metric DriveMetric
+func drivesParse(out string, logger log.Logger) ([]DriveMetric, error) {
+	var metrics []DriveMetric
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		l := strings.TrimSpace(line)
-		val, err := strconv.ParseFloat(l, 64)
-		if err != nil {
+		items := strings.Split(l, ",")
+		if len(items) != 3 {
 			continue
 		}
-		metric.offline = val
+		var metric DriveMetric
+		metric.library = items[0]
+		metric.name = items[1]
+		if items[2] == "YES" {
+			metric.online = true
+		} else {
+			metric.online = false
+		}
+		metrics = append(metrics, metric)
 	}
-	return metric, nil
+	return metrics, nil
 }
 
-func drivesReadCache(target string) DriveMetric {
-	var metrics DriveMetric
+func drivesReadCache(target string) []DriveMetric {
+	var metrics []DriveMetric
 	drivesCacheMutex.RLock()
 	if cache, ok := drivesCache[target]; ok {
 		metrics = cache
@@ -152,7 +161,7 @@ func drivesReadCache(target string) DriveMetric {
 	return metrics
 }
 
-func drivesWriteCache(target string, metrics DriveMetric) {
+func drivesWriteCache(target string, metrics []DriveMetric) {
 	drivesCacheMutex.Lock()
 	drivesCache[target] = metrics
 	drivesCacheMutex.Unlock()
