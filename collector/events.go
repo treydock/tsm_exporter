@@ -141,7 +141,6 @@ func dsmadmcEvents(target *config.Target, ctx context.Context, logger log.Logger
 func eventsParse(out string, target *config.Target, useCache bool, logger log.Logger) (map[string]EventMetric, error) {
 	metrics := make(map[string]EventMetric)
 	statusCond := []string{"Completed", "Future", "Started", "In Progress", "Pending"}
-	timeFormat := "2006-01-02 15:04:05.000000"
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		l := strings.TrimSpace(line)
