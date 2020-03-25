@@ -253,8 +253,13 @@ func replicationviewParse(out string, target *config.Target, useCache bool, logg
 			} else {
 				metric.EndTimestamp = float64(end_time.Unix())
 			}
-			duration := end_time.Sub(start_time).Seconds()
-			metric.Duration = duration
+			if metric.EndTimestamp < 0 {
+				metric.EndTimestamp = 0
+				metric.Duration = 0
+			} else {
+				duration := end_time.Sub(start_time).Seconds()
+				metric.Duration = duration
+			}
 			if useCache {
 				replicationviewMetricCacheMutex.Lock()
 				replicationviewMetricCache[cacheKey] = metric
