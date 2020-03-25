@@ -29,7 +29,8 @@ import (
 )
 
 const (
-	namespace = "tsm"
+	namespace  = "tsm"
+	timeFormat = "2006-01-02 15:04:05.000000"
 )
 
 var (
@@ -98,7 +99,7 @@ func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logg
 	servername := fmt.Sprintf("-SERVERName=%s", target.Servername)
 	id := fmt.Sprintf("-ID=%s", target.Id)
 	password := fmt.Sprintf("-PAssword=%s", target.Password)
-	level.Debug(logger).Log("msg", fmt.Sprintf("query=%s", query))
+	level.Debug(logger).Log("msg", "dsmadmc query", "query", query)
 	cmd := execCommand(ctx, "dsmadmc", servername, id, password, "-DATAONLY=YES", "-COMMAdelimited", query)
 	os.Setenv("DSM_LOG", *dsmLogDir)
 	var stdout bytes.Buffer
@@ -113,5 +114,6 @@ func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logg
 		level.Error(logger).Log("msg", "Error executing dsmadc", "err", stderr.String(), "out", stdout.String())
 		return "", err
 	}
+	level.Debug(logger).Log("msg", "query output", "out", stdout.String())
 	return stdout.String(), nil
 }

@@ -96,6 +96,27 @@ func TestReplicationViewsParseWithNodeNames(t *testing.T) {
 	}
 }
 
+func TestReplicationViewsParseNegativeEndtime(t *testing.T) {
+	stdout := `
+NOT COMPLETED,1970-01-01 00:00:00.000000,/TEST4,TEST2DB2,2020-03-23 00:45:29.000000,1052637876956,2
+`
+	metrics, err := replicationviewParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected err: %s", err.Error())
+		return
+	}
+	if len(metrics) != 1 {
+		t.Errorf("Expected 1 metrics, got %d", len(metrics))
+		return
+	}
+	if val := metrics["TEST2DB2-/TEST4"].EndTimestamp; val != 0 {
+		t.Errorf("Expected 0 EndTimestamp, got %v", val)
+	}
+	if val := metrics["TEST2DB2-/TEST4"].Duration; val != 0 {
+		t.Errorf("Expected 0 Duration, got %v", val)
+	}
+}
+
 func TestReplicationViewsParseDurationCache(t *testing.T) {
 	metrics, err := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
 	if err != nil {

@@ -184,7 +184,6 @@ func replicationviewParse(out string, target *config.Target, useCache bool, logg
 	metrics := make(map[string]ReplicationViewMetric)
 	notCompleted := make(map[string]float64)
 	fields := getReplFields()
-	timeFormat := "2006-01-02 15:04:05.000000"
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		values := strings.Split(strings.TrimSpace(line), ",")
@@ -254,8 +253,13 @@ func replicationviewParse(out string, target *config.Target, useCache bool, logg
 			} else {
 				metric.EndTimestamp = float64(end_time.Unix())
 			}
-			duration := end_time.Sub(start_time).Seconds()
-			metric.Duration = duration
+			if metric.EndTimestamp < 0 {
+				metric.EndTimestamp = 0
+				metric.Duration = 0
+			} else {
+				duration := end_time.Sub(start_time).Seconds()
+				metric.Duration = duration
+			}
 			if useCache {
 				replicationviewMetricCacheMutex.Lock()
 				replicationviewMetricCache[cacheKey] = metric
