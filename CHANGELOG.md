@@ -1,3 +1,7 @@
+## 0.2.1 / 2020-03-25
+
+* Ensure multiple non completed replications are counted
+
 ## 0.2.0 / 2020-03-23
 
 * Ensure DSM_LOG can be set via command line argument
