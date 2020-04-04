@@ -118,13 +118,7 @@ func (c *LogCollector) collect() (LogMetric, error) {
 		}
 		return metrics, err
 	}
-	metrics, err = logParse(out, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = logReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = logParse(out, c.logger)
 	if c.useCache {
 		logWriteCache(c.target.Name, metrics)
 	}
@@ -138,7 +132,7 @@ func dsmadmcLog(target *config.Target, ctx context.Context, logger log.Logger) (
 	return out, err
 }
 
-func logParse(out string, logger log.Logger) (LogMetric, error) {
+func logParse(out string, logger log.Logger) LogMetric {
 	var metric LogMetric
 	fields := getLogFields()
 	lines := strings.Split(out, "\n")
@@ -169,7 +163,7 @@ func logParse(out string, logger log.Logger) (LogMetric, error) {
 			}
 		}
 	}
-	return metric, nil
+	return metric
 }
 
 func getLogFields() []string {

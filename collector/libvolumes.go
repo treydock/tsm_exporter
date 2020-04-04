@@ -99,13 +99,7 @@ func (c *LibVolumesCollector) collect() (LibVolumeMetric, error) {
 		}
 		return metrics, err
 	}
-	metrics, err = libvolumesParse(out, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = libvolumesReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = libvolumesParse(out, c.logger)
 	if c.useCache {
 		libvolumesWriteCache(c.target.Name, metrics)
 	}
@@ -121,7 +115,7 @@ func dsmadmcLibVolumes(target *config.Target, ctx context.Context, logger log.Lo
 	return out, err
 }
 
-func libvolumesParse(out string, logger log.Logger) (LibVolumeMetric, error) {
+func libvolumesParse(out string, logger log.Logger) LibVolumeMetric {
 	var metric LibVolumeMetric
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
@@ -132,7 +126,7 @@ func libvolumesParse(out string, logger log.Logger) (LibVolumeMetric, error) {
 		}
 		metric.scratch = val
 	}
-	return metric, nil
+	return metric
 }
 
 func libvolumesReadCache(target string) LibVolumeMetric {

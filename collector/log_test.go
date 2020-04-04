@@ -32,11 +32,7 @@ var (
 )
 
 func TestLogParse(t *testing.T) {
-	metrics, err := logParse(mockedLogStdout, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := logParse(mockedLogStdout, log.NewNopLogger())
 	if val := metrics.Total; val != 34359738368 {
 		t.Errorf("Unexpected Total, got %v", val)
 	}

@@ -36,11 +36,7 @@ READONLY
 )
 
 func TestVolumesParse(t *testing.T) {
-	metrics, err := volumesParse(mockVolumeStdout, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := volumesParse(mockVolumeStdout, log.NewNopLogger())
 	if metrics.unavailable != 2 {
 		t.Errorf("Expected 1 unavailable, got %v", metrics.unavailable)
 	}

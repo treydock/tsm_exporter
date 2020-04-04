@@ -100,13 +100,7 @@ func (c *DrivesCollector) collect() ([]DriveMetric, error) {
 		}
 		return metrics, err
 	}
-	metrics, err = drivesParse(out, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = drivesReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = drivesParse(out, c.logger)
 	if c.useCache {
 		drivesWriteCache(c.target.Name, metrics)
 	}
@@ -122,7 +116,7 @@ func dsmadmcDrives(target *config.Target, ctx context.Context, logger log.Logger
 	return out, err
 }
 
-func drivesParse(out string, logger log.Logger) ([]DriveMetric, error) {
+func drivesParse(out string, logger log.Logger) []DriveMetric {
 	var metrics []DriveMetric
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
@@ -141,7 +135,7 @@ func drivesParse(out string, logger log.Logger) ([]DriveMetric, error) {
 		}
 		metrics = append(metrics, metric)
 	}
-	return metrics, nil
+	return metrics
 }
 
 func drivesReadCache(target string) []DriveMetric {

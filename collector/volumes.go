@@ -103,13 +103,7 @@ func (c *VolumesCollector) collect() (VolumeMetric, error) {
 		}
 		return metrics, err
 	}
-	metrics, err = volumesParse(out, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = volumesReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = volumesParse(out, c.logger)
 	if c.useCache {
 		volumesWriteCache(c.target.Name, metrics)
 	}
@@ -122,7 +116,7 @@ func dsmadmcVolumes(target *config.Target, ctx context.Context, logger log.Logge
 	return out, err
 }
 
-func volumesParse(out string, logger log.Logger) (VolumeMetric, error) {
+func volumesParse(out string, logger log.Logger) VolumeMetric {
 	var metric VolumeMetric
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
@@ -134,7 +128,7 @@ func volumesParse(out string, logger log.Logger) (VolumeMetric, error) {
 			metric.readonly++
 		}
 	}
-	return metric, nil
+	return metric
 }
 
 func volumesReadCache(target string) VolumeMetric {

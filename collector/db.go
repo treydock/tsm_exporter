@@ -176,13 +176,7 @@ func (c *DBCollector) collect() ([]DBMetric, error) {
 		}
 		return metrics, err
 	}
-	metrics, err = dbParse(out, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = dbReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = dbParse(out, c.logger)
 	if c.useCache {
 		dbWriteCache(c.target.Name, metrics)
 	}
@@ -196,7 +190,7 @@ func dsmadmcDB(target *config.Target, ctx context.Context, logger log.Logger) (s
 	return out, err
 }
 
-func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
+func dbParse(out string, logger log.Logger) []DBMetric {
 	var metrics []DBMetric
 	fields := getDBFields()
 	lines := strings.Split(out, "\n")
@@ -229,7 +223,7 @@ func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
 		}
 		metrics = append(metrics, metric)
 	}
-	return metrics, nil
+	return metrics
 }
 
 func getDBFields() []string {

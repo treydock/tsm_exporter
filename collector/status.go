@@ -95,13 +95,7 @@ func (c *StatusCollector) collect() (StatusMetric, error) {
 		}
 		return metrics, err
 	}
-	metrics, err = statusParse(out, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = statusReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = statusParse(out, c.logger)
 	if c.useCache {
 		statusWriteCache(c.target.Name, metrics)
 	}
@@ -114,7 +108,7 @@ func dsmadmcStatus(target *config.Target, ctx context.Context, logger log.Logger
 	return out, err
 }
 
-func statusParse(out string, logger log.Logger) (StatusMetric, error) {
+func statusParse(out string, logger log.Logger) StatusMetric {
 	var metric StatusMetric
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
@@ -130,7 +124,7 @@ func statusParse(out string, logger log.Logger) (StatusMetric, error) {
 		metric.status = 0
 		metric.reason = "servername not found"
 	}
-	return metric, nil
+	return metric
 }
 
 func statusReadCache(target string) StatusMetric {

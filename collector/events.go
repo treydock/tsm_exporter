@@ -108,13 +108,7 @@ func (c *EventsCollector) collect() (map[string]EventMetric, error) {
 		}
 		return metrics, err
 	}
-	metrics, err = eventsParse(out, c.target, *useEventDurationCache, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = eventsReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = eventsParse(out, c.target, *useEventDurationCache, c.logger)
 	if c.useCache {
 		eventsWriteCache(c.target.Name, metrics)
 	}
@@ -131,7 +125,7 @@ func dsmadmcEvents(target *config.Target, ctx context.Context, logger log.Logger
 	return out, err
 }
 
-func eventsParse(out string, target *config.Target, useCache bool, logger log.Logger) (map[string]EventMetric, error) {
+func eventsParse(out string, target *config.Target, useCache bool, logger log.Logger) map[string]EventMetric {
 	metrics := make(map[string]EventMetric)
 	statusCond := []string{"Completed", "Future", "Started", "In Progress", "Pending"}
 	lines := strings.Split(out, "\n")
@@ -185,7 +179,7 @@ func eventsParse(out string, target *config.Target, useCache bool, logger log.Lo
 		}
 		metrics[sched] = metric
 	}
-	return metrics, nil
+	return metrics
 }
 
 func eventsReadCache(target string) map[string]EventMetric {

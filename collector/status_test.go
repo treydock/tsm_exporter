@@ -34,11 +34,7 @@ SP03,,1500,Off,Yes,05/22/2019 13:26:41,03/11/2020 14:36:50,On,90 Day(s),0,8,Clos
 )
 
 func TestStatusParse(t *testing.T) {
-	metrics, err := statusParse(mockStatusStdout, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := statusParse(mockStatusStdout, log.NewNopLogger())
 	if metrics.status != 1 {
 		t.Errorf("Expected status 1, got %v", metrics.status)
 	}
@@ -48,11 +44,7 @@ func TestStatusParse(t *testing.T) {
 }
 
 func TestStatusParseNoServername(t *testing.T) {
-	metrics, err := statusParse("", log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := statusParse("", log.NewNopLogger())
 	if metrics.status != 0 {
 		t.Errorf("Expected status 0, got %v", metrics.status)
 	}
