@@ -79,7 +79,7 @@ func NewCollector(target *config.Target, logger log.Logger) *TSMCollector {
 		}
 		var collector Collector
 		if enable {
-			collector = factories[key](target, log.With(logger, "collector", key), *exporterUseCache)
+			collector = factories[key](target, log.With(logger, "collector", key, "target", target.Name), *exporterUseCache)
 			collectors[key] = collector
 		}
 	}
@@ -119,8 +119,13 @@ func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logg
 		if strings.Contains(stdout.String(), "No match found using this criteria") {
 			return "", nil
 		}
-		level.Error(logger).Log("msg", "Error executing dsmadc", "err", stderr.String(), "out", stdout.String())
-		return "", err
+		if ctx.Err() == context.DeadlineExceeded {
+			level.Error(logger).Log("msg", "Timeout executing dsmadmc")
+			return "", ctx.Err()
+		} else {
+			level.Error(logger).Log("msg", "Error executing dsmadc", "err", stderr.String(), "out", stdout.String())
+			return "", err
+		}
 	}
 	level.Debug(logger).Log("msg", "query output", "out", stdout.String())
 	return stdout.String(), nil

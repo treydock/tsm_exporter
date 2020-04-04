@@ -65,11 +65,10 @@ func (c *StatusCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *StatusCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting status metrics")
+	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
 	metrics, err := c.collect()
 	if err == context.DeadlineExceeded {
-		level.Error(c.logger).Log("msg", "Timeout executing dsmadmc")
 		metrics.status = 0
 		metrics.reason = "timeout"
 	} else if err != nil {
@@ -90,12 +89,6 @@ func (c *StatusCollector) collect() (StatusMetric, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*statusTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcStatusExec(c.target, ctx, c.logger)
-	if ctx.Err() == context.DeadlineExceeded {
-		if c.useCache {
-			metrics = statusReadCache(c.target.Name)
-		}
-		return metrics, ctx.Err()
-	}
 	if err != nil {
 		if c.useCache {
 			metrics = statusReadCache(c.target.Name)

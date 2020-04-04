@@ -82,13 +82,12 @@ func (c *LogCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *LogCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting log metrics")
+	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
 	if err == context.DeadlineExceeded {
-		level.Error(c.logger).Log("msg", "Timeout executing dsmadmc")
 		timeout = 1
 	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
@@ -113,12 +112,6 @@ func (c *LogCollector) collect() (LogMetric, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*logTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcLogExec(c.target, ctx, c.logger)
-	if ctx.Err() == context.DeadlineExceeded {
-		if c.useCache {
-			metrics = logReadCache(c.target.Name)
-		}
-		return metrics, ctx.Err()
-	}
 	if err != nil {
 		if c.useCache {
 			metrics = logReadCache(c.target.Name)

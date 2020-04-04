@@ -66,13 +66,12 @@ func (c *DrivesCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting drives metrics")
+	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
 	if err == context.DeadlineExceeded {
-		level.Error(c.logger).Log("msg", "Timeout executing dsmadmc")
 		timeout = 1
 	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
@@ -95,12 +94,6 @@ func (c *DrivesCollector) collect() ([]DriveMetric, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*drivesTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcDrivesExec(c.target, ctx, c.logger)
-	if ctx.Err() == context.DeadlineExceeded {
-		if c.useCache {
-			metrics = drivesReadCache(c.target.Name)
-		}
-		return metrics, ctx.Err()
-	}
 	if err != nil {
 		if c.useCache {
 			metrics = drivesReadCache(c.target.Name)
