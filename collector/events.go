@@ -73,13 +73,12 @@ func (c *EventsCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *EventsCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting events metrics")
+	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
 	if err == context.DeadlineExceeded {
-		level.Error(c.logger).Log("msg", "Timeout executing dsmadmc")
 		timeout = 1
 	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
@@ -103,25 +102,13 @@ func (c *EventsCollector) collect() (map[string]EventMetric, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*eventsTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcEventsExec(c.target, ctx, c.logger)
-	if ctx.Err() == context.DeadlineExceeded {
-		if c.useCache {
-			metrics = eventsReadCache(c.target.Name)
-		}
-		return metrics, ctx.Err()
-	}
 	if err != nil {
 		if c.useCache {
 			metrics = eventsReadCache(c.target.Name)
 		}
 		return metrics, err
 	}
-	metrics, err = eventsParse(out, c.target, *useEventDurationCache, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = eventsReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = eventsParse(out, c.target, *useEventDurationCache, c.logger)
 	if c.useCache {
 		eventsWriteCache(c.target.Name, metrics)
 	}
@@ -138,7 +125,7 @@ func dsmadmcEvents(target *config.Target, ctx context.Context, logger log.Logger
 	return out, err
 }
 
-func eventsParse(out string, target *config.Target, useCache bool, logger log.Logger) (map[string]EventMetric, error) {
+func eventsParse(out string, target *config.Target, useCache bool, logger log.Logger) map[string]EventMetric {
 	metrics := make(map[string]EventMetric)
 	statusCond := []string{"Completed", "Future", "Started", "In Progress", "Pending"}
 	lines := strings.Split(out, "\n")
@@ -192,7 +179,7 @@ func eventsParse(out string, target *config.Target, useCache bool, logger log.Lo
 		}
 		metrics[sched] = metric
 	}
-	return metrics, nil
+	return metrics
 }
 
 func eventsReadCache(target string) map[string]EventMetric {

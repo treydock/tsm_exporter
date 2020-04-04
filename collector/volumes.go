@@ -68,13 +68,12 @@ func (c *VolumesCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *VolumesCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting volumes metrics")
+	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
 	if err == context.DeadlineExceeded {
-		level.Error(c.logger).Log("msg", "Timeout executing dsmadmc")
 		timeout = 1
 	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
@@ -98,25 +97,13 @@ func (c *VolumesCollector) collect() (VolumeMetric, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*volumesTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcVolumesExec(c.target, ctx, c.logger)
-	if ctx.Err() == context.DeadlineExceeded {
-		if c.useCache {
-			metrics = volumesReadCache(c.target.Name)
-		}
-		return metrics, ctx.Err()
-	}
 	if err != nil {
 		if c.useCache {
 			metrics = volumesReadCache(c.target.Name)
 		}
 		return metrics, err
 	}
-	metrics, err = volumesParse(out, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = volumesReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = volumesParse(out, c.logger)
 	if c.useCache {
 		volumesWriteCache(c.target.Name, metrics)
 	}
@@ -129,7 +116,7 @@ func dsmadmcVolumes(target *config.Target, ctx context.Context, logger log.Logge
 	return out, err
 }
 
-func volumesParse(out string, logger log.Logger) (VolumeMetric, error) {
+func volumesParse(out string, logger log.Logger) VolumeMetric {
 	var metric VolumeMetric
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
@@ -141,7 +128,7 @@ func volumesParse(out string, logger log.Logger) (VolumeMetric, error) {
 			metric.readonly++
 		}
 	}
-	return metric, nil
+	return metric
 }
 
 func volumesReadCache(target string) VolumeMetric {

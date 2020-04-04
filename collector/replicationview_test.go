@@ -39,11 +39,7 @@ COMPLETE,2020-03-22 00:05:57.000000,/srv,TEST2DB.DOMAIN,2020-03-22 00:05:23.0000
 )
 
 func TestReplicationViewsParse(t *testing.T) {
-	metrics, err := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
 	if len(metrics) != 3 {
 		t.Errorf("Expected 3 metrics, got %d", len(metrics))
 		return
@@ -68,11 +64,7 @@ NOT COMPLETED,2020-03-22 06:02:38.000000,/TEST2CONF,TEST2DB2,2020-03-22 00:45:29
 COMPLETE,2020-03-22 06:02:38.000000,/TEST4,TEST2DB2,2020-03-22 00:45:29.000000,1052637876316,2
 COMPLETE,2020-03-22 00:05:57.000000,/srv,TEST2DB.DOMAIN,2020-03-22 00:05:23.000000,234680204,12
 `
-	metrics, err := replicationviewParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := replicationviewParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
 	if len(metrics) != 3 {
 		t.Errorf("Expected 3 metrics, got %d", len(metrics))
 		return
@@ -83,11 +75,7 @@ COMPLETE,2020-03-22 00:05:57.000000,/srv,TEST2DB.DOMAIN,2020-03-22 00:05:23.0000
 }
 
 func TestReplicationViewsParseWithNodeNames(t *testing.T) {
-	metrics, err := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test", ReplicationNodeNames: []string{"TEST2DB2"}}, false, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test", ReplicationNodeNames: []string{"TEST2DB2"}}, false, log.NewNopLogger())
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %d", len(metrics))
 	}
@@ -100,11 +88,7 @@ func TestReplicationViewsParseNegativeEndtime(t *testing.T) {
 	stdout := `
 NOT COMPLETED,1970-01-01 00:00:00.000000,/TEST4,TEST2DB2,2020-03-23 00:45:29.000000,1052637876956,2
 `
-	metrics, err := replicationviewParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := replicationviewParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
 	if len(metrics) != 1 {
 		t.Errorf("Expected 1 metrics, got %d", len(metrics))
 		return
@@ -118,11 +102,7 @@ NOT COMPLETED,1970-01-01 00:00:00.000000,/TEST4,TEST2DB2,2020-03-23 00:45:29.000
 }
 
 func TestReplicationViewsParseDurationCache(t *testing.T) {
-	metrics, err := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := replicationviewParse(mockReplicationViewStdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
 	if len(metrics) != 3 {
 		t.Errorf("Expected 3 metrics, got %d", len(metrics))
 		return
@@ -138,11 +118,7 @@ NOTCOMPLETE,2020-03-23 06:06:45.000000,/TEST2CONF,TEST2DB2,2020-03-23 00:45:29.0
 COMPLETE,2020-03-23 06:06:45.000000,/TEST4,TEST2DB2,2020-03-23 00:45:29.000000,1052637876956,2
 COMPLETE,2020-03-23 00:06:08.000000,/srv,TEST2DB.DOMAIN,2020-03-23 00:05:24.000000,245650752,10
 `
-	metrics, err = replicationviewParse(stdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics = replicationviewParse(stdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
 	if len(metrics) != 3 {
 		t.Errorf("Expected 3 metrics, got %d", len(metrics))
 		return
@@ -163,11 +139,7 @@ func TestReplicationHandleBadValues(t *testing.T) {
 COMPLETE,bad end date,/TEST4,TEST2DB2,2020-03-23 00:45:29.000000,1052637876956,bad number
 COMPLETE,2020-03-23 00:06:08.000000,/srv,TEST2DB.DOMAIN,bad start date,bad number,10
 `
-	metrics, err := replicationviewParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := replicationviewParse(stdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %d", len(metrics))
 		return

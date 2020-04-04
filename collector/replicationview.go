@@ -109,13 +109,12 @@ func (c *ReplicationViewsCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting replicationview metrics")
+	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
 	if err == context.DeadlineExceeded {
-		level.Error(c.logger).Log("msg", "Timeout executing dsmadmc")
 		timeout = 1
 	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
@@ -143,25 +142,13 @@ func (c *ReplicationViewsCollector) collect() (map[string]ReplicationViewMetric,
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*replicationviewTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcReplicationViewsExec(c.target, ctx, c.logger)
-	if ctx.Err() == context.DeadlineExceeded {
-		if c.useCache {
-			metrics = replicationviewReadCache(c.target.Name)
-		}
-		return metrics, ctx.Err()
-	}
 	if err != nil {
 		if c.useCache {
 			metrics = replicationviewReadCache(c.target.Name)
 		}
 		return metrics, err
 	}
-	metrics, err = replicationviewParse(out, c.target, *useReplicationViewMetricCache, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = replicationviewReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = replicationviewParse(out, c.target, *useReplicationViewMetricCache, c.logger)
 	if c.useCache {
 		replicationviewWriteCache(c.target.Name, metrics)
 	}
@@ -180,7 +167,7 @@ func dsmadmcReplicationViews(target *config.Target, ctx context.Context, logger 
 	return out, err
 }
 
-func replicationviewParse(out string, target *config.Target, useCache bool, logger log.Logger) (map[string]ReplicationViewMetric, error) {
+func replicationviewParse(out string, target *config.Target, useCache bool, logger log.Logger) map[string]ReplicationViewMetric {
 	metrics := make(map[string]ReplicationViewMetric)
 	notCompleted := make(map[string]float64)
 	fields := getReplFields()
@@ -268,7 +255,7 @@ func replicationviewParse(out string, target *config.Target, useCache bool, logg
 		}
 		metrics[key] = metric
 	}
-	return metrics, nil
+	return metrics
 }
 
 func getReplFields() []string {

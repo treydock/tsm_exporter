@@ -32,11 +32,7 @@ var (
 )
 
 func TestDBParse(t *testing.T) {
-	metrics, err := dbParse(mockedDBStdout, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := dbParse(mockedDBStdout, log.NewNopLogger())
 	if len(metrics) != 1 {
 		t.Errorf("Expected 1 metrics, got %v", len(metrics))
 		return

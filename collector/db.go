@@ -132,13 +132,12 @@ func (c *DBCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *DBCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting db metrics")
+	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
 	if err == context.DeadlineExceeded {
-		level.Error(c.logger).Log("msg", "Timeout executing dsmadmc")
 		timeout = 1
 	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
@@ -171,25 +170,13 @@ func (c *DBCollector) collect() ([]DBMetric, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*dbTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcDBExec(c.target, ctx, c.logger)
-	if ctx.Err() == context.DeadlineExceeded {
-		if c.useCache {
-			metrics = dbReadCache(c.target.Name)
-		}
-		return metrics, ctx.Err()
-	}
 	if err != nil {
 		if c.useCache {
 			metrics = dbReadCache(c.target.Name)
 		}
 		return metrics, err
 	}
-	metrics, err = dbParse(out, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = dbReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = dbParse(out, c.logger)
 	if c.useCache {
 		dbWriteCache(c.target.Name, metrics)
 	}
@@ -203,7 +190,7 @@ func dsmadmcDB(target *config.Target, ctx context.Context, logger log.Logger) (s
 	return out, err
 }
 
-func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
+func dbParse(out string, logger log.Logger) []DBMetric {
 	var metrics []DBMetric
 	fields := getDBFields()
 	lines := strings.Split(out, "\n")
@@ -224,6 +211,7 @@ func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
 				val, err := strconv.ParseFloat(values[i], 64)
 				if err != nil {
 					level.Error(logger).Log("msg", fmt.Sprintf("Error parsing %s value %s: %s", k, values[i], err.Error()))
+					continue
 				}
 				if strings.HasSuffix(k, "_MB") {
 					valBytes := val * 1024 * 1024
@@ -235,7 +223,7 @@ func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
 		}
 		metrics = append(metrics, metric)
 	}
-	return metrics, nil
+	return metrics
 }
 
 func getDBFields() []string {

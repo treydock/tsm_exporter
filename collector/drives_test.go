@@ -37,11 +37,7 @@ LIBENC,TAPE01,NO
 )
 
 func TestDrivesParse(t *testing.T) {
-	metrics, err := drivesParse(mockDriveStdout, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := drivesParse(mockDriveStdout, log.NewNopLogger())
 	if len(metrics) != 4 {
 		t.Errorf("Expected 4 metrics, got %d", len(metrics))
 	}

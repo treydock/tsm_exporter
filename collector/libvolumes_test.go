@@ -32,11 +32,7 @@ var (
 )
 
 func TestLibVolumesParse(t *testing.T) {
-	metrics, err := libvolumesParse(mockLibVolumeStdout, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := libvolumesParse(mockLibVolumeStdout, log.NewNopLogger())
 	if metrics.scratch != 100 {
 		t.Errorf("Expected 100 scratch, got %v", metrics.scratch)
 	}

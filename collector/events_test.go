@@ -37,11 +37,7 @@ BAR,Not Started,,
 )
 
 func TestEventsParse(t *testing.T) {
-	metrics, err := eventsParse(mockEventStdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := eventsParse(mockEventStdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %d", len(metrics))
 		return
@@ -58,11 +54,7 @@ func TestEventsParse(t *testing.T) {
 }
 
 func TestEventsParseWithSchedules(t *testing.T) {
-	metrics, err := eventsParse(mockEventStdout, &config.Target{Name: "test", Schedules: []string{"BAR"}}, false, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := eventsParse(mockEventStdout, &config.Target{Name: "test", Schedules: []string{"BAR"}}, false, log.NewNopLogger())
 	if len(metrics) != 1 {
 		t.Errorf("Expected 1 metrics, got %d", len(metrics))
 	}
@@ -72,11 +64,7 @@ func TestEventsParseWithSchedules(t *testing.T) {
 }
 
 func TestEventsParseDurationCache(t *testing.T) {
-	metrics, err := eventsParse(mockEventStdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics := eventsParse(mockEventStdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %d", len(metrics))
 		return
@@ -91,11 +79,7 @@ func TestEventsParseDurationCache(t *testing.T) {
 FOO,Not Started,,
 BAR,Completed,2020-03-22 05:09:44.000000,2020-03-22 05:41:14.000000
 `
-	metrics, err = eventsParse(stdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected err: %s", err.Error())
-		return
-	}
+	metrics = eventsParse(stdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %d", len(metrics))
 		return

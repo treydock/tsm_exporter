@@ -66,13 +66,12 @@ func (c *DrivesCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting drives metrics")
+	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
 	if err == context.DeadlineExceeded {
-		level.Error(c.logger).Log("msg", "Timeout executing dsmadmc")
 		timeout = 1
 	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
@@ -95,25 +94,13 @@ func (c *DrivesCollector) collect() ([]DriveMetric, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*drivesTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcDrivesExec(c.target, ctx, c.logger)
-	if ctx.Err() == context.DeadlineExceeded {
-		if c.useCache {
-			metrics = drivesReadCache(c.target.Name)
-		}
-		return metrics, ctx.Err()
-	}
 	if err != nil {
 		if c.useCache {
 			metrics = drivesReadCache(c.target.Name)
 		}
 		return metrics, err
 	}
-	metrics, err = drivesParse(out, c.logger)
-	if err != nil {
-		if c.useCache {
-			metrics = drivesReadCache(c.target.Name)
-		}
-		return metrics, err
-	}
+	metrics = drivesParse(out, c.logger)
 	if c.useCache {
 		drivesWriteCache(c.target.Name, metrics)
 	}
@@ -129,7 +116,7 @@ func dsmadmcDrives(target *config.Target, ctx context.Context, logger log.Logger
 	return out, err
 }
 
-func drivesParse(out string, logger log.Logger) ([]DriveMetric, error) {
+func drivesParse(out string, logger log.Logger) []DriveMetric {
 	var metrics []DriveMetric
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
@@ -148,7 +135,7 @@ func drivesParse(out string, logger log.Logger) ([]DriveMetric, error) {
 		}
 		metrics = append(metrics, metric)
 	}
-	return metrics, nil
+	return metrics
 }
 
 func drivesReadCache(target string) []DriveMetric {
