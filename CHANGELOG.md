@@ -1,3 +1,7 @@
+## 0.4.0 / 2020-04-04
+
+* Simplified timeout and error handling
+
 ## 0.3.0 / 2020-03-25
 
 * Refactor drives collector to expose a metric per drive
