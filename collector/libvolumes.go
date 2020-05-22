@@ -31,16 +31,19 @@ import (
 var (
 	libvolumesTimeout     = kingpin.Flag("collector.libvolumes.timeout", "Timeout for collecting libvolumes information").Default("5").Int()
 	DsmadmcLibVolumesExec = dsmadmcLibVolumes
-	libvolumesCache       = map[string]LibVolumeMetric{}
+	libvolumesCache       = map[string][]LibVolumeMetric{}
 	libvolumesCacheMutex  = sync.RWMutex{}
 )
 
 type LibVolumeMetric struct {
-	scratch float64
+	mediatype string
+	status    string
+	count     float64
 }
 
 type LibVolumesCollector struct {
 	scratch  *prometheus.Desc
+	media    *prometheus.Desc
 	target   *config.Target
 	logger   log.Logger
 	useCache bool
@@ -52,8 +55,10 @@ func init() {
 
 func NewLibVolumesExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
 	return &LibVolumesCollector{
-		scratch: prometheus.NewDesc(prometheus.BuildFQName(namespace, "tapes", "scratch"),
+		scratch: prometheus.NewDesc(prometheus.BuildFQName(namespace, "libvolume", "scratch"),
 			"Number of scratch tapes", nil, nil),
+		media: prometheus.NewDesc(prometheus.BuildFQName(namespace, "libvolume", "media"),
+			"Number of tapes", []string{"mediatype", "status"}, nil),
 		target:   target,
 		logger:   logger,
 		useCache: useCache,
@@ -62,6 +67,7 @@ func NewLibVolumesExporter(target *config.Target, logger log.Logger, useCache bo
 
 func (c *LibVolumesCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.scratch
+	ch <- c.media
 }
 
 func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
@@ -77,8 +83,15 @@ func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
 		errorMetric = 1
 	}
 
+	var scratch float64
+	for _, m := range metrics {
+		if m.status == "scratch" {
+			scratch += m.count
+		}
+		ch <- prometheus.MustNewConstMetric(c.media, prometheus.GaugeValue, m.count, m.mediatype, m.status)
+	}
 	if err == nil || c.useCache {
-		ch <- prometheus.MustNewConstMetric(c.scratch, prometheus.GaugeValue, metrics.scratch)
+		ch <- prometheus.MustNewConstMetric(c.scratch, prometheus.GaugeValue, scratch)
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "libvolumes")
@@ -86,10 +99,10 @@ func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "libvolumes")
 }
 
-func (c *LibVolumesCollector) collect() (LibVolumeMetric, error) {
+func (c *LibVolumesCollector) collect() ([]LibVolumeMetric, error) {
 	var err error
 	var out string
-	var metrics LibVolumeMetric
+	var metrics []LibVolumeMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*libvolumesTimeout)*time.Second)
 	defer cancel()
 	out, err = DsmadmcLibVolumesExec(c.target, ctx, c.logger)
@@ -107,7 +120,7 @@ func (c *LibVolumesCollector) collect() (LibVolumeMetric, error) {
 }
 
 func dsmadmcLibVolumes(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	query := "SELECT count(*) FROM libvolumes WHERE status='Scratch'"
+	query := "SELECT MEDIATYPE,STATUS,COUNT(*) FROM libvolumes GROUP BY(MEDIATYPE,STATUS)"
 	if target.LibraryName != "" {
 		query = query + fmt.Sprintf(" AND library_name='%s'", target.LibraryName)
 	}
@@ -115,22 +128,31 @@ func dsmadmcLibVolumes(target *config.Target, ctx context.Context, logger log.Lo
 	return out, err
 }
 
-func libvolumesParse(out string, logger log.Logger) LibVolumeMetric {
-	var metric LibVolumeMetric
+func libvolumesParse(out string, logger log.Logger) []LibVolumeMetric {
+	var metrics []LibVolumeMetric
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		l := strings.TrimSpace(line)
-		val, err := strconv.ParseFloat(l, 64)
-		if err != nil {
+		items := strings.Split(l, ",")
+		if len(items) != 3 {
 			continue
 		}
-		metric.scratch = val
+		var metric LibVolumeMetric
+		metric.mediatype = items[0]
+		metric.status = strings.ToLower(items[1])
+		count, err := strconv.ParseFloat(items[2], 64)
+		if err != nil {
+			level.Error(logger).Log("msg", fmt.Sprintf("Error parsing libvolume value '%s': %s", items[2], err.Error()))
+			continue
+		}
+		metric.count = count
+		metrics = append(metrics, metric)
 	}
-	return metric
+	return metrics
 }
 
-func libvolumesReadCache(target string) LibVolumeMetric {
-	var metrics LibVolumeMetric
+func libvolumesReadCache(target string) []LibVolumeMetric {
+	var metrics []LibVolumeMetric
 	libvolumesCacheMutex.RLock()
 	if cache, ok := libvolumesCache[target]; ok {
 		metrics = cache
@@ -139,7 +161,7 @@ func libvolumesReadCache(target string) LibVolumeMetric {
 	return metrics
 }
 
-func libvolumesWriteCache(target string, metrics LibVolumeMetric) {
+func libvolumesWriteCache(target string, metrics []LibVolumeMetric) {
 	libvolumesCacheMutex.Lock()
 	libvolumesCache[target] = metrics
 	libvolumesCacheMutex.Unlock()
