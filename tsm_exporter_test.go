@@ -43,9 +43,16 @@ READONLY
 `
 	mockedDBStdout      = "88.6,TSMDB1,3092796,1453663,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n"
 	mockedLogStdout     = "32426.00,32768.00,342.00\n"
-	mockLibVolumeStdout = "100\n"
-	mockDriveStdout     = "1\n"
-	mockEventStdout     = `
+	mockLibVolumeStdout = `
+LTO-5,Private,147
+LTO-5,Scratch,342
+LTO-6,Private,573
+LTO-6,Scratch,365
+LTO-7,Private,1082
+LTO-7,Scratch,153
+`
+	mockDriveStdout = "1\n"
+	mockEventStdout = `
 FOO,Completed,2020-03-22 05:09:43.000000,2020-03-22 05:41:14.000000
 FOO,Future,,
 BAR,Not Started,,
