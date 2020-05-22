@@ -51,7 +51,12 @@ LTO-6,Scratch,365
 LTO-7,Private,1082
 LTO-7,Scratch,153
 `
-	mockDriveStdout = "1\n"
+	mockDriveStdout = `
+LIB1,TAPE10,YES,LOADED,FOO1
+LIB1,TAPE11,YES,LOADED,FOO2
+LIBENC,TAPE00,YES,EMPTY,
+LIBENC,TAPE01,NO,EMPTY,
+`
 	mockEventStdout = `
 FOO,Completed,2020-03-22 05:09:43.000000,2020-03-22 05:41:14.000000
 FOO,Future,,

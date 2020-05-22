@@ -38,10 +38,14 @@ type DriveMetric struct {
 	library string
 	name    string
 	online  bool
+	state   string
+	volume  string
 }
 
 type DrivesCollector struct {
 	online   *prometheus.Desc
+	state    *prometheus.Desc
+	volume   *prometheus.Desc
 	target   *config.Target
 	logger   log.Logger
 	useCache bool
@@ -55,6 +59,10 @@ func NewDrivesExporter(target *config.Target, logger log.Logger, useCache bool) 
 	return &DrivesCollector{
 		online: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drive", "online"),
 			"Inidicates if the drive is online, 1=online, 0=offline", []string{"library", "name"}, nil),
+		state: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drive", "state_info"),
+			"Current state of the drive", []string{"library", "name", "state"}, nil),
+		volume: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drive", "volume_info"),
+			"Current volume of the drive", []string{"library", "name", "volume"}, nil),
 		target:   target,
 		logger:   logger,
 		useCache: useCache,
@@ -63,6 +71,8 @@ func NewDrivesExporter(target *config.Target, logger log.Logger, useCache bool) 
 
 func (c *DrivesCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.online
+	ch <- c.state
+	ch <- c.volume
 }
 
 func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
@@ -80,6 +90,8 @@ func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for _, m := range metrics {
 		ch <- prometheus.MustNewConstMetric(c.online, prometheus.GaugeValue, boolToFloat64(m.online), m.library, m.name)
+		ch <- prometheus.MustNewConstMetric(c.state, prometheus.GaugeValue, 1, m.library, m.name, m.state)
+		ch <- prometheus.MustNewConstMetric(c.volume, prometheus.GaugeValue, 1, m.library, m.name, m.volume)
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "drives")
@@ -108,7 +120,7 @@ func (c *DrivesCollector) collect() ([]DriveMetric, error) {
 }
 
 func dsmadmcDrives(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	query := "SELECT library_name,drive_name,online FROM drives"
+	query := "SELECT library_name,drive_name,online,drive_state,volume_name FROM drives"
 	if target.LibraryName != "" {
 		query = query + fmt.Sprintf(" WHERE library_name='%s'", target.LibraryName)
 	}
@@ -122,7 +134,7 @@ func drivesParse(out string, logger log.Logger) []DriveMetric {
 	for _, line := range lines {
 		l := strings.TrimSpace(line)
 		items := strings.Split(l, ",")
-		if len(items) != 3 {
+		if len(items) != 5 {
 			continue
 		}
 		var metric DriveMetric
@@ -133,6 +145,8 @@ func drivesParse(out string, logger log.Logger) []DriveMetric {
 		} else {
 			metric.online = false
 		}
+		metric.state = strings.ToLower(items[3])
+		metric.volume = items[4]
 		metrics = append(metrics, metric)
 	}
 	return metrics
