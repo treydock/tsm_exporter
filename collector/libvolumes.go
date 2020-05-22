@@ -142,6 +142,7 @@ func libvolumesParse(out string, logger log.Logger) []LibVolumeMetric {
 		metric.status = strings.ToLower(items[1])
 		count, err := strconv.ParseFloat(items[2], 64)
 		if err != nil {
+			level.Error(logger).Log("msg", fmt.Sprintf("Error parsing libvolume value '%s': %s", items[2], err.Error()))
 			continue
 		}
 		metric.count = count
