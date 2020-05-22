@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -28,7 +29,7 @@ import (
 )
 
 var (
-	mockedDBStdout = "88.6,TSMDB1,3092796,1453663,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n"
+	mockedDBStdout = "88.6,TSMDB1,3092796,1453663,2020-05-22 08:10:00.000000,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n"
 )
 
 func TestDBParse(t *testing.T) {
@@ -58,6 +59,9 @@ func TestDBCollector(t *testing.T) {
 	tsm_db_buffer_total_requests{dbname="TSMDB1"} 11607707032
 	# HELP tsm_db_pages_free DB free pages
 	# TYPE tsm_db_pages_free gauge
+	# HELP tsm_db_last_backup_time Time since last backup in epoch
+	# TYPE tsm_db_last_backup_time gauge
+	tsm_db_last_backup_time{dbname="TSMDB1"} 1.590135e+09
 	tsm_db_pages_free{dbname="TSMDB1"} 3092796
 	# HELP tsm_db_pages_total DB total pages
 	# TYPE tsm_db_pages_total gauge
@@ -90,15 +94,18 @@ func TestDBCollector(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="db"} 0
 	`
-	collector := NewDBExporter(&config.Target{}, log.NewNopLogger(), false)
+	w := log.NewSyncWriter(os.Stderr)
+	logger := log.NewLogfmtLogger(w)
+	collector := NewDBExporter(&config.Target{}, logger, false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 14 {
-		t.Errorf("Unexpected collection count %d, expected 14", val)
+	if val := testutil.CollectAndCount(collector); val != 15 {
+		t.Errorf("Unexpected collection count %d, expected 15", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_db_space_total_bytes", "tsm_db_space_used_bytes", "tsm_db_space_free_bytes",
 		"tsm_db_pages_total", "tsm_db_pages_usable", "tsm_db_pages_used", "tsm_db_pages_free",
 		"tsm_db_buffer_hit_ratio", "tsm_db_buffer_total_requests", "tsm_db_sort_overflow", "tsm_db_pkg_hit_ratio",
+		"tsm_db_last_backup_time",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -170,6 +177,9 @@ func TestDBCollectorCache(t *testing.T) {
 	# HELP tsm_db_buffer_total_requests DB total buffer requests
 	# TYPE tsm_db_buffer_total_requests counter
 	tsm_db_buffer_total_requests{dbname="TSMDB1"} 11607707032
+	# HELP tsm_db_last_backup_time Time since last backup in epoch
+	# TYPE tsm_db_last_backup_time gauge
+	tsm_db_last_backup_time{dbname="TSMDB1"} 1.590135e+09
 	# HELP tsm_db_pages_free DB free pages
 	# TYPE tsm_db_pages_free gauge
 	tsm_db_pages_free{dbname="TSMDB1"} 3092796
@@ -210,32 +220,34 @@ func TestDBCollectorCache(t *testing.T) {
 	`
 	collector := NewDBExporter(&config.Target{}, log.NewNopLogger(), true)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 14 {
-		t.Errorf("Unexpected collection count %d, expected 14", val)
+	if val := testutil.CollectAndCount(collector); val != 15 {
+		t.Errorf("Unexpected collection count %d, expected 15", val)
 	}
 	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	if val := testutil.CollectAndCount(collector); val != 14 {
-		t.Errorf("Unexpected collection count %d, expected 14", val)
+	if val := testutil.CollectAndCount(collector); val != 15 {
+		t.Errorf("Unexpected collection count %d, expected 15", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
 		"tsm_db_space_total_bytes", "tsm_db_space_used_bytes", "tsm_db_space_free_bytes",
 		"tsm_db_pages_total", "tsm_db_pages_usable", "tsm_db_pages_used", "tsm_db_pages_free",
 		"tsm_db_buffer_hit_ratio", "tsm_db_buffer_total_requests", "tsm_db_sort_overflow", "tsm_db_pkg_hit_ratio",
+		"tsm_db_last_backup_time",
 		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
-	if val := testutil.CollectAndCount(collector); val != 14 {
-		t.Errorf("Unexpected collection count %d, expected 14", val)
+	if val := testutil.CollectAndCount(collector); val != 15 {
+		t.Errorf("Unexpected collection count %d, expected 15", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),
 		"tsm_db_space_total_bytes", "tsm_db_space_used_bytes", "tsm_db_space_free_bytes",
 		"tsm_db_pages_total", "tsm_db_pages_usable", "tsm_db_pages_used", "tsm_db_pages_free",
 		"tsm_db_buffer_hit_ratio", "tsm_db_buffer_total_requests", "tsm_db_sort_overflow", "tsm_db_pkg_hit_ratio",
+		"tsm_db_last_backup_time",
 		"tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}

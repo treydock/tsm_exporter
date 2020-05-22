@@ -48,6 +48,7 @@ var (
 		"TOTAL_BUFF_REQ":     "TotalBuffReq",
 		"SORT_OVERFLOW":      "SortOverflow",
 		"PKG_HIT_RATIO":      "PkgHitRatio",
+		"LAST_BACKUP_DATE":   "LastBackup",
 	}
 )
 
@@ -64,6 +65,7 @@ type DBMetric struct {
 	TotalBuffReq float64
 	SortOverflow float64
 	PkgHitRatio  float64
+	LastBackup   string
 }
 
 type DBCollector struct {
@@ -78,6 +80,7 @@ type DBCollector struct {
 	TotalBuffReq *prometheus.Desc
 	SortOverflow *prometheus.Desc
 	PkgHitRatio  *prometheus.Desc
+	LastBackup   *prometheus.Desc
 	target       *config.Target
 	logger       log.Logger
 	useCache     bool
@@ -111,6 +114,8 @@ func NewDBExporter(target *config.Target, logger log.Logger, useCache bool) Coll
 			"DB sort overflow", []string{"dbname"}, nil),
 		PkgHitRatio: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "pkg_hit_ratio"),
 			"DB pkg hit ratio", []string{"dbname"}, nil),
+		LastBackup: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "last_backup_time"),
+			"Time since last backup in epoch", []string{"dbname"}, nil),
 		target:   target,
 		logger:   logger,
 		useCache: useCache,
@@ -129,6 +134,7 @@ func (c *DBCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.TotalBuffReq
 	ch <- c.SortOverflow
 	ch <- c.PkgHitRatio
+	ch <- c.LastBackup
 }
 
 func (c *DBCollector) Collect(ch chan<- prometheus.Metric) {
@@ -156,6 +162,12 @@ func (c *DBCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(c.TotalBuffReq, prometheus.CounterValue, m.TotalBuffReq, m.Name)
 		ch <- prometheus.MustNewConstMetric(c.SortOverflow, prometheus.GaugeValue, m.SortOverflow, m.Name)
 		ch <- prometheus.MustNewConstMetric(c.PkgHitRatio, prometheus.GaugeValue, m.PkgHitRatio, m.Name)
+		lastBackup, err := time.Parse("2006-01-02 15:04:05.000000", m.LastBackup)
+		if err == nil {
+			ch <- prometheus.MustNewConstMetric(c.LastBackup, prometheus.GaugeValue, float64(lastBackup.Unix()), m.Name)
+		} else {
+			level.Error(c.logger).Log("msg", fmt.Sprintf("Error parsing lastBackup value %s: %s", m.LastBackup, err.Error()))
+		}
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "db")
