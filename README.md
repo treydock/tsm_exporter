@@ -32,6 +32,7 @@ drives | Collect count of offline drives | Enabled
 events | Collect event duration and number of not completed events | Enabled
 replicationview | Collect metrics about replication | Enabled
 stgpools | Collect storage pool metrics | Enabled
+volumeusage | Collect aggregates of volume counts by node name | Enabled
 
 ## Configuration
 
@@ -55,6 +56,10 @@ targets:
     - volumes
     - log
     - db
+    - volumeusage
+    volumeusage_map:
+      LTO6: '^E.*'
+      LT07: '^F.*'
 ```
 
 This exporter could then be queried via one of these two commands below.  The `tsm2.example.com` target will only run the `status`, `volumes`, `log` and `db` collectors.
@@ -70,7 +75,10 @@ The `libvolumes` and `drives` collectors can be limited to a specific library na
 
 The `events` collector can be limited to specific schedules via the `schedules` config value.
 
-The `replicationview` collector can be limited to specific node names via the `replication_node_names` config vlaue.
+The `replicationview` collector can be limited to specific node names via the `replication_node_names` config value.
+
+The `volumeusage` collector can map specific volume names to metric labels via `volumeusage_map` config value.
+The example above will map volumes starting with `E` to be counted as `LTO6` and volumes starting with `F` counted as `LT07`. If no mapping is defined the metrics will just set `volumename="all"` and the metrics will count volumes per node name.
 
 ## Dependencies
 

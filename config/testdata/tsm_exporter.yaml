@@ -8,3 +8,6 @@ targets:
       - DB1
     replication_node_names:
       - TEST1
+    volumeusage_map:
+      LTO6: '^E.*'
+      LT07: '^F.*'
