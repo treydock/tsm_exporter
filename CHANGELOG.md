@@ -1,3 +1,10 @@
+## 0.5.0 / 2020-05-28
+
+* BREAKING: Rename tsm_tapes_scratch to tsm_libvolume_scratch
+* Add tsm_libvolume_media metrics
+* Add tsm_drive_state_info and tsm_drive_volume_info metrics
+* Add tsm_db_last_backup_time metric
+
 ## 0.4.0 / 2020-04-04
 
 * Simplified timeout and error handling
