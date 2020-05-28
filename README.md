@@ -26,6 +26,7 @@ status | Collect status information about TSM | Enabled
 volumes | Collect count of unavailable or readonly volumes | Enabled
 log | Collect active log space metrics | Enabled
 db | Collect DB space information | Enabled
+occupancy | Collect occupancy metrics | Enabled
 libvolumes | Collect count of scratch tapes | Enabled
 drives | Collect count of offline drives | Enabled
 events | Collect event duration and number of not completed events | Enabled
