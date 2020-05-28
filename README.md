@@ -30,6 +30,7 @@ libvolumes | Collect count of scratch tapes | Enabled
 drives | Collect count of offline drives | Enabled
 events | Collect event duration and number of not completed events | Enabled
 replicationview | Collect metrics about replication | Enabled
+stgpools | Collect storage pool metrics | Enabled
 
 ## Configuration
 
