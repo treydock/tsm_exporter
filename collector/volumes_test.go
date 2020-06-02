@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -29,19 +30,18 @@ import (
 
 var (
 	mockVolumeStdout = `
-UNAVAILABLE
-UNAVAILABLE
-READONLY
+READWRITE,512000.0,0.0,DCFILEE,/fs/diskpool/sp02/enc-gpfs/svol49
+READWRITE,2396430.0,100.0,DCULT6E,E00090L6
+READWRITE,9067296.0,43.7,DCULT7,F00397L7
+UNAVAILABLE,8199467.0,68.5,DCULT7,F00640L7
+READONLY,5735346.0,94.6,DCULT7,F00529L7
 `
 )
 
 func TestVolumesParse(t *testing.T) {
 	metrics := volumesParse(mockVolumeStdout, log.NewNopLogger())
-	if metrics.unavailable != 2 {
-		t.Errorf("Expected 1 unavailable, got %v", metrics.unavailable)
-	}
-	if metrics.readonly != 1 {
-		t.Errorf("Expected 1 readonly, got %v", metrics.readonly)
+	if val := len(metrics); val != 5 {
+		t.Errorf("Expected 5 metrics, got %d", val)
 	}
 }
 
@@ -49,6 +49,8 @@ func TestVolumesCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
+	classnameExclude := "^DCFILE.*"
+	volumesClassnameExclude = &classnameExclude
 	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockVolumeStdout, nil
 	}
@@ -59,20 +61,34 @@ func TestVolumesCollector(t *testing.T) {
     # HELP tsm_exporter_collect_timeout Indicates the collector timed out
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="volumes"} 0
+	# HELP tsm_volume_estimated_capacity_bytes Volume estimated capacity
+	# TYPE tsm_volume_estimated_capacity_bytes gauge
+	tsm_volume_estimated_capacity_bytes{classname="DCULT6E",name="E00090L6"} 2512838983680
+	tsm_volume_estimated_capacity_bytes{classname="DCULT7",name="F00397L7"} 9507748970496
+	tsm_volume_estimated_capacity_bytes{classname="DCULT7",name="F00529L7"} 6013946167296
+	tsm_volume_estimated_capacity_bytes{classname="DCULT7",name="F00640L7"} 8597764308992
+	# HELP tsm_volume_utilized_percent Volume percent utilized
+	# TYPE tsm_volume_utilized_percent gauge
+	tsm_volume_utilized_percent{classname="DCULT6E",name="E00090L6"} 100
+	tsm_volume_utilized_percent{classname="DCULT7",name="F00397L7"} 43.7
+	tsm_volume_utilized_percent{classname="DCULT7",name="F00529L7"} 94.6
+	tsm_volume_utilized_percent{classname="DCULT7",name="F00640L7"} 68.5
     # HELP tsm_volumes_readonly Number of readonly volumes
     # TYPE tsm_volumes_readonly gauge
     tsm_volumes_readonly 1
 	# HELP tsm_volumes_unavailable Number of unavailable volumes
     # TYPE tsm_volumes_unavailable gauge
-    tsm_volumes_unavailable 2
+    tsm_volumes_unavailable 1
 	`
-	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger(), false)
+	w := log.NewSyncWriter(os.Stderr)
+	logger := log.NewLogfmtLogger(w)
+	collector := NewVolumesExporter(&config.Target{}, logger, false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 5 {
-		t.Errorf("Unexpected collection count %d, expected 5", val)
+	if val := testutil.CollectAndCount(collector); val != 13 {
+		t.Errorf("Unexpected collection count %d, expected 13", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_volumes_unavailable", "tsm_volumes_readonly",
+		"tsm_volumes_unavailable", "tsm_volumes_readonly", "tsm_volume_estimated_capacity_bytes", "tsm_volume_utilized_percent",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -136,16 +152,30 @@ func TestVolumesCollectorCache(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
+	classnameExclude := "^DCFILE.*"
+	volumesClassnameExclude = &classnameExclude
 	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockVolumeStdout, nil
 	}
 	expected := `
+	# HELP tsm_volume_estimated_capacity_bytes Volume estimated capacity
+	# TYPE tsm_volume_estimated_capacity_bytes gauge
+	tsm_volume_estimated_capacity_bytes{classname="DCULT6E",name="E00090L6"} 2512838983680
+	tsm_volume_estimated_capacity_bytes{classname="DCULT7",name="F00397L7"} 9507748970496
+	tsm_volume_estimated_capacity_bytes{classname="DCULT7",name="F00529L7"} 6013946167296
+	tsm_volume_estimated_capacity_bytes{classname="DCULT7",name="F00640L7"} 8597764308992
+	# HELP tsm_volume_utilized_percent Volume percent utilized
+	# TYPE tsm_volume_utilized_percent gauge
+	tsm_volume_utilized_percent{classname="DCULT6E",name="E00090L6"} 100
+	tsm_volume_utilized_percent{classname="DCULT7",name="F00397L7"} 43.7
+	tsm_volume_utilized_percent{classname="DCULT7",name="F00529L7"} 94.6
+	tsm_volume_utilized_percent{classname="DCULT7",name="F00640L7"} 68.5
     # HELP tsm_volumes_readonly Number of readonly volumes
     # TYPE tsm_volumes_readonly gauge
     tsm_volumes_readonly 1
 	# HELP tsm_volumes_unavailable Number of unavailable volumes
     # TYPE tsm_volumes_unavailable gauge
-    tsm_volumes_unavailable 2
+    tsm_volumes_unavailable 1
 	`
 	errorMetric := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
@@ -159,27 +189,29 @@ func TestVolumesCollectorCache(t *testing.T) {
 	`
 	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger(), true)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 5 {
-		t.Errorf("Unexpected collection count %d, expected 5", val)
+	if val := testutil.CollectAndCount(collector); val != 13 {
+		t.Errorf("Unexpected collection count %d, expected 13", val)
 	}
 	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	if val := testutil.CollectAndCount(collector); val != 5 {
-		t.Errorf("Unexpected collection count %d, expected 5", val)
+	if val := testutil.CollectAndCount(collector); val != 13 {
+		t.Errorf("Unexpected collection count %d, expected 13", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
-		"tsm_volumes_unavailable", "tsm_volumes_readonly", "tsm_exporter_collect_error"); err != nil {
+		"tsm_volumes_unavailable", "tsm_volumes_readonly", "tsm_volume_estimated_capacity_bytes", "tsm_volume_utilized_percent",
+		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
-	if val := testutil.CollectAndCount(collector); val != 5 {
-		t.Errorf("Unexpected collection count %d, expected 5", val)
+	if val := testutil.CollectAndCount(collector); val != 13 {
+		t.Errorf("Unexpected collection count %d, expected 13", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),
-		"tsm_volumes_unavailable", "tsm_volumes_readonly", "tsm_exporter_collect_timeout"); err != nil {
+		"tsm_volumes_unavailable", "tsm_volumes_readonly", "tsm_volume_estimated_capacity_bytes", "tsm_volume_utilized_percent",
+		"tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

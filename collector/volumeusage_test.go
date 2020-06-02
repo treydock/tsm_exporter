@@ -48,7 +48,17 @@ func TestVolumeUsagesParse(t *testing.T) {
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %v", len(metrics))
 	}
-	if val := len(metrics[0].volumecounts); val != 2 {
+	var metric VolumeUsageMetric
+	for _, m := range metrics {
+		if m.nodename == "NETAPPUSER2" {
+			metric = m
+			break
+		}
+	}
+	if metric.nodename == "" {
+		t.Fatal("Did not find NETAPPUSER2 metric")
+	}
+	if val := len(metric.volumecounts); val != 2 {
 		t.Errorf("Expected 2 volume counts, got %d", val)
 	}
 }
