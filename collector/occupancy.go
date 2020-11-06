@@ -43,6 +43,7 @@ var (
 		"PHYSICAL_MB":    "Physical",
 		"LOGICAL_MB":     "Logical",
 	}
+	occupancyLabelFields = []string{"NODE_NAME", "FILESPACE_NAME", "STGPOOL_NAME"}
 )
 
 type OccupancyMetric struct {
@@ -133,7 +134,19 @@ func (c *OccupancysCollector) collect() ([]OccupancyMetric, error) {
 
 func dsmadmcOccupancys(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 	fields := getOccupancyFields()
-	query := fmt.Sprintf("SELECT %s FROM occupancy", strings.Join(fields, ","))
+	var queryFields []string
+	var groupFields []string
+	for _, f := range fields {
+		var field string
+		if sliceContains(occupancyLabelFields, f) {
+			groupFields = append(groupFields, f)
+			field = f
+		} else {
+			field = fmt.Sprintf("SUM(%s)", f)
+		}
+		queryFields = append(queryFields, field)
+	}
+	query := fmt.Sprintf("SELECT %s FROM occupancy GROUP BY %s", strings.Join(queryFields, ","), strings.Join(groupFields, ","))
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
