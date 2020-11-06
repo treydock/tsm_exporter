@@ -72,7 +72,9 @@ func TestStoragePoolCollector(t *testing.T) {
 	logger := log.NewLogfmtLogger(w)
 	collector := NewStoragePoolExporter(&config.Target{}, logger, false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 6 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 6 {
 		t.Errorf("Unexpected collection count %d, expected 6", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
@@ -99,7 +101,9 @@ func TestStoragePoolCollectorError(t *testing.T) {
 	`
 	collector := NewStoragePoolExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 3 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 3 {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
@@ -125,7 +129,9 @@ func TestStoragePoolCollectorTimeout(t *testing.T) {
 	`
 	collector := NewStoragePoolExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 3 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 3 {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
@@ -160,13 +166,17 @@ func TestStoragePoolCollectorCache(t *testing.T) {
 	`
 	collector := NewStoragePoolExporter(&config.Target{}, log.NewNopLogger(), true)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 6 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 6 {
 		t.Errorf("Unexpected collection count %d, expected 6", val)
 	}
 	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	if val := testutil.CollectAndCount(collector); val != 6 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 6 {
 		t.Errorf("Unexpected collection count %d, expected 6", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
@@ -177,7 +187,9 @@ func TestStoragePoolCollectorCache(t *testing.T) {
 	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
-	if val := testutil.CollectAndCount(collector); val != 6 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 6 {
 		t.Errorf("Unexpected collection count %d, expected 6", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),

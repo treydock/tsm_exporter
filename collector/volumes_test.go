@@ -84,7 +84,9 @@ func TestVolumesCollector(t *testing.T) {
 	logger := log.NewLogfmtLogger(w)
 	collector := NewVolumesExporter(&config.Target{}, logger, false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 13 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 13 {
 		t.Errorf("Unexpected collection count %d, expected 13", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
@@ -111,7 +113,9 @@ func TestVolumesCollectorError(t *testing.T) {
 	`
 	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 3 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 3 {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
@@ -138,7 +142,9 @@ func TestVolumesCollectorTimeout(t *testing.T) {
 	`
 	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 3 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 3 {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
@@ -189,13 +195,17 @@ func TestVolumesCollectorCache(t *testing.T) {
 	`
 	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger(), true)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 13 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 13 {
 		t.Errorf("Unexpected collection count %d, expected 13", val)
 	}
 	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	if val := testutil.CollectAndCount(collector); val != 13 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 13 {
 		t.Errorf("Unexpected collection count %d, expected 13", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
@@ -206,7 +216,9 @@ func TestVolumesCollectorCache(t *testing.T) {
 	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
-	if val := testutil.CollectAndCount(collector); val != 13 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 13 {
 		t.Errorf("Unexpected collection count %d, expected 13", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),

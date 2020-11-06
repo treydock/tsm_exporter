@@ -67,7 +67,9 @@ func TestStatusCollector(t *testing.T) {
 	`
 	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 2 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 2 {
 		t.Errorf("Unexpected collection count %d, expected 2", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
@@ -91,7 +93,9 @@ func TestStatusCollectorError(t *testing.T) {
 	`
 	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 2 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 2 {
 		t.Errorf("Unexpected collection count %d, expected 2", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
@@ -115,7 +119,9 @@ func TestStatusCollectorTimeout(t *testing.T) {
 	`
 	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger(), false)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 2 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 2 {
 		t.Errorf("Unexpected collection count %d, expected 2", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
@@ -144,13 +150,17 @@ func TestStatusCollectorCache(t *testing.T) {
 	`
 	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger(), true)
 	gatherers := setupGatherer(collector)
-	if val := testutil.CollectAndCount(collector); val != 2 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 2 {
 		t.Errorf("Unexpected collection count %d, expected 2", val)
 	}
 	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	if val := testutil.CollectAndCount(collector); val != 2 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 2 {
 		t.Errorf("Unexpected collection count %d, expected 2", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric),
@@ -160,7 +170,9 @@ func TestStatusCollectorCache(t *testing.T) {
 	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
-	if val := testutil.CollectAndCount(collector); val != 2 {
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 2 {
 		t.Errorf("Unexpected collection count %d, expected 2", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric),
