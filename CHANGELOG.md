@@ -1,3 +1,11 @@
+## 0.6.0 / 2020-11-06
+
+* Update to Go 1.15 and update dependencies
+* Add tsm_volume_utilized_percent and tsm_volume_estimated_capacity_bytes metrics
+* Add volumeusage collector
+* Add occupancy collector
+* Add stgpools collector
+
 ## 0.5.0 / 2020-05-28
 
 * BREAKING: Rename tsm_tapes_scratch to tsm_libvolume_scratch
