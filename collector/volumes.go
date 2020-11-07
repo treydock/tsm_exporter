@@ -61,9 +61,9 @@ func NewVolumesExporter(target *config.Target, logger log.Logger) Collector {
 		readonly: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volumes", "readonly"),
 			"Number of readonly volumes", nil, nil),
 		utilized: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volume", "utilized_percent"),
-			"Volume percent utilized", []string{"name", "classname"}, nil),
+			"Volume percent utilized", []string{"volume", "classname"}, nil),
 		capacity: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volume", "estimated_capacity_bytes"),
-			"Volume estimated capacity", []string{"name", "classname"}, nil),
+			"Volume estimated capacity", []string{"volume", "classname"}, nil),
 		target: target,
 		logger: logger,
 	}

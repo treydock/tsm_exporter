@@ -56,22 +56,22 @@ func TestDrivesCollector(t *testing.T) {
 	expected := `
 	# HELP tsm_drive_online Inidicates if the drive is online, 1=online, 0=offline
 	# TYPE tsm_drive_online gauge
-	tsm_drive_online{library="LIB1",name="TAPE10"} 1
-	tsm_drive_online{library="LIB1",name="TAPE11"} 1
-	tsm_drive_online{library="LIBENC",name="TAPE00"} 1
-	tsm_drive_online{library="LIBENC",name="TAPE01"} 0
+	tsm_drive_online{drive="TAPE10",library="LIB1"} 1
+	tsm_drive_online{drive="TAPE11",library="LIB1"} 1
+	tsm_drive_online{drive="TAPE00",library="LIBENC"} 1
+	tsm_drive_online{drive="TAPE01",library="LIBENC"} 0
 	# HELP tsm_drive_state_info Current state of the drive
 	# TYPE tsm_drive_state_info gauge
-	tsm_drive_state_info{library="LIB1",name="TAPE10",state="loaded"} 1
-	tsm_drive_state_info{library="LIB1",name="TAPE11",state="loaded"} 1
-	tsm_drive_state_info{library="LIBENC",name="TAPE00",state="empty"} 1
-	tsm_drive_state_info{library="LIBENC",name="TAPE01",state="empty"} 1
+	tsm_drive_state_info{drive="TAPE10",library="LIB1",state="loaded"} 1
+	tsm_drive_state_info{drive="TAPE11",library="LIB1",state="loaded"} 1
+	tsm_drive_state_info{drive="TAPE00",library="LIBENC",state="empty"} 1
+	tsm_drive_state_info{drive="TAPE01",library="LIBENC",state="empty"} 1
 	# HELP tsm_drive_volume_info Current volume of the drive
 	# TYPE tsm_drive_volume_info gauge
-	tsm_drive_volume_info{library="LIB1",name="TAPE10",volume="FOO1"} 1
-	tsm_drive_volume_info{library="LIB1",name="TAPE11",volume="FOO2"} 1
-	tsm_drive_volume_info{library="LIBENC",name="TAPE00",volume=""} 1
-	tsm_drive_volume_info{library="LIBENC",name="TAPE01",volume=""} 1
+	tsm_drive_volume_info{drive="TAPE10",library="LIB1",volume="FOO1"} 1
+	tsm_drive_volume_info{drive="TAPE11",library="LIB1",volume="FOO2"} 1
+	tsm_drive_volume_info{drive="TAPE00",library="LIBENC",volume=""} 1
+	tsm_drive_volume_info{drive="TAPE01",library="LIBENC",volume=""} 1
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="drives"} 0
