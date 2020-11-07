@@ -1,3 +1,12 @@
+## 0.7.0 / TBD
+
+### BREAKING CHANGES
+
+* Remove --exporter.use-cache flag and all caching logic
+* For drive metrics, replace name label with drive
+* For storage_pool metrics, replace name label with storagepool
+* For volume metrics, replace name label with volume
+
 ## 0.6.0 / 2020-11-06
 
 * Update to Go 1.15 and update dependencies
