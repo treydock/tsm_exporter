@@ -20,7 +20,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -33,8 +32,6 @@ import (
 var (
 	logTimeout     = kingpin.Flag("collector.log.timeout", "Timeout for collecting log information").Default("10").Int()
 	DsmadmcLogExec = dsmadmcLog
-	logCache       = map[string]LogMetric{}
-	logCacheMutex  = sync.RWMutex{}
 	logMap         = map[string]string{
 		"TOTAL_SPACE_MB": "Total",
 		"USED_SPACE_MB":  "Used",
@@ -49,19 +46,18 @@ type LogMetric struct {
 }
 
 type LogCollector struct {
-	Total    *prometheus.Desc
-	Used     *prometheus.Desc
-	Free     *prometheus.Desc
-	target   *config.Target
-	logger   log.Logger
-	useCache bool
+	Total  *prometheus.Desc
+	Used   *prometheus.Desc
+	Free   *prometheus.Desc
+	target *config.Target
+	logger log.Logger
 }
 
 func init() {
 	registerCollector("log", true, NewLogExporter)
 }
 
-func NewLogExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewLogExporter(target *config.Target, logger log.Logger) Collector {
 	return &LogCollector{
 		Total: prometheus.NewDesc(prometheus.BuildFQName(namespace, "active_log", "total_bytes"),
 			"Active log total space in bytes", nil, nil),
@@ -69,9 +65,8 @@ func NewLogExporter(target *config.Target, logger log.Logger, useCache bool) Col
 			"Active log used space in bytes", nil, nil),
 		Free: prometheus.NewDesc(prometheus.BuildFQName(namespace, "active_log", "free_bytes"),
 			"Active log free space in bytes", nil, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -94,7 +89,7 @@ func (c *LogCollector) Collect(ch chan<- prometheus.Metric) {
 		errorMetric = 1
 	}
 
-	if err == nil || c.useCache {
+	if err == nil {
 		ch <- prometheus.MustNewConstMetric(c.Total, prometheus.GaugeValue, metrics.Total)
 		ch <- prometheus.MustNewConstMetric(c.Used, prometheus.GaugeValue, metrics.Used)
 		ch <- prometheus.MustNewConstMetric(c.Free, prometheus.GaugeValue, metrics.Free)
@@ -106,22 +101,13 @@ func (c *LogCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *LogCollector) collect() (LogMetric, error) {
-	var err error
-	var out string
-	var metrics LogMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*logTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcLogExec(c.target, ctx, c.logger)
+	out, err := DsmadmcLogExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = logReadCache(c.target.Name)
-		}
-		return metrics, err
+		return LogMetric{}, err
 	}
-	metrics = logParse(out, c.logger)
-	if c.useCache {
-		logWriteCache(c.target.Name, metrics)
-	}
+	metrics := logParse(out, c.logger)
 	return metrics, nil
 }
 
@@ -173,20 +159,4 @@ func getLogFields() []string {
 	}
 	sort.Strings(fields)
 	return fields
-}
-
-func logReadCache(target string) LogMetric {
-	var metric LogMetric
-	logCacheMutex.RLock()
-	if cache, ok := logCache[target]; ok {
-		metric = cache
-	}
-	logCacheMutex.RUnlock()
-	return metric
-}
-
-func logWriteCache(target string, metric LogMetric) {
-	logCacheMutex.Lock()
-	logCache[target] = metric
-	logCacheMutex.Unlock()
 }

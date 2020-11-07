@@ -120,7 +120,7 @@ func TestEventsCollector(t *testing.T) {
     tsm_schedule_not_completed{schedule="BAR"} 2
     tsm_schedule_not_completed{schedule="FOO"} 0
 	`
-	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -149,7 +149,7 @@ func TestEventsCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="events"} 0
 	`
-	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -178,7 +178,7 @@ func TestEventsCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="events"} 1
 	`
-	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -188,68 +188,6 @@ func TestEventsCollectorTimeout(t *testing.T) {
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-}
-
-func TestEventsCollectorCache(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
-		t.Fatal(err)
-	}
-	cache := false
-	useEventDurationCache = &cache
-	DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockEventStdout, nil
-	}
-	expected := `
-	# HELP tsm_schedule_duration_seconds Amount of time taken to complete scheduled event for today, in seconds
-	# TYPE tsm_schedule_duration_seconds gauge
-	tsm_schedule_duration_seconds{schedule="BAR"} 0
-	tsm_schedule_duration_seconds{schedule="FOO"} 1891
-    # HELP tsm_schedule_not_completed Number of scheduled events not completed for today
-    # TYPE tsm_schedule_not_completed gauge
-    tsm_schedule_not_completed{schedule="BAR"} 2
-    tsm_schedule_not_completed{schedule="FOO"} 0
-	`
-	errorMetric := `
-    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
-    # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="events"} 1
-	`
-	timeoutMetric := `
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="events"} 1
-	`
-	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger(), true)
-	gatherers := setupGatherer(collector)
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 7 {
-		t.Errorf("Unexpected collection count %d, expected 7", val)
-	}
-	DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", fmt.Errorf("Error")
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 7 {
-		t.Errorf("Unexpected collection count %d, expected 7", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
-		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds", "tsm_exporter_collect_error"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-	DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", context.DeadlineExceeded
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 7 {
-		t.Errorf("Unexpected collection count %d, expected 7", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),
-		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

@@ -70,7 +70,7 @@ func TestStoragePoolCollector(t *testing.T) {
 	`
 	w := log.NewSyncWriter(os.Stderr)
 	logger := log.NewLogfmtLogger(w)
-	collector := NewStoragePoolExporter(&config.Target{}, logger, false)
+	collector := NewStoragePoolExporter(&config.Target{}, logger)
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -99,7 +99,7 @@ func TestStoragePoolCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="stgpools"} 0
 	`
-	collector := NewStoragePoolExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewStoragePoolExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -127,7 +127,7 @@ func TestStoragePoolCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="stgpools"} 1
 	`
-	collector := NewStoragePoolExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewStoragePoolExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -136,65 +136,6 @@ func TestStoragePoolCollectorTimeout(t *testing.T) {
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_storage_pool_utilized_percent", "tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-}
-
-func TestStoragePoolCollectorCache(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
-		t.Fatal(err)
-	}
-	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockedStoragePoolStdout, nil
-	}
-	expected := `
-	# HELP tsm_storage_pool_utilized_percent Storage pool utilized percent
-	# TYPE tsm_storage_pool_utilized_percent gauge
-	tsm_storage_pool_utilized_percent{classname="DISK",name="ARCHIVEPOOL",pooltype="PRIMARY",storagetype="DEVCLASS"} 0.0
-	tsm_storage_pool_utilized_percent{classname="DCFILEE",name="EPFESS",pooltype="PRIMARY",storagetype="DEVCLASS"} 41.8
-	tsm_storage_pool_utilized_percent{classname="DCULT7",name="PTGPFS",pooltype="PRIMARY",storagetype="DEVCLASS"} 42.6
-	`
-	errorMetric := `
-    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
-    # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="stgpools"} 1
-	`
-	timeoutMetric := `
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="stgpools"} 1
-	`
-	collector := NewStoragePoolExporter(&config.Target{}, log.NewNopLogger(), true)
-	gatherers := setupGatherer(collector)
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 6 {
-		t.Errorf("Unexpected collection count %d, expected 6", val)
-	}
-	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", fmt.Errorf("Error")
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 6 {
-		t.Errorf("Unexpected collection count %d, expected 6", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
-		"tsm_storage_pool_utilized_percent",
-		"tsm_exporter_collect_error"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", context.DeadlineExceeded
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 6 {
-		t.Errorf("Unexpected collection count %d, expected 6", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),
-		"tsm_storage_pool_utilized_percent",
-		"tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

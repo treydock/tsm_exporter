@@ -20,7 +20,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -33,8 +32,6 @@ import (
 var (
 	dbTimeout     = kingpin.Flag("collector.db.timeout", "Timeout for collecting db information").Default("10").Int()
 	DsmadmcDBExec = dsmadmcDB
-	dbCache       = map[string][]DBMetric{}
-	dbCacheMutex  = sync.RWMutex{}
 	dbMap         = map[string]string{
 		"DATABASE_NAME":      "Name",
 		"TOT_FILE_SYSTEM_MB": "TotalSpace",
@@ -83,14 +80,13 @@ type DBCollector struct {
 	LastBackup   *prometheus.Desc
 	target       *config.Target
 	logger       log.Logger
-	useCache     bool
 }
 
 func init() {
 	registerCollector("db", true, NewDBExporter)
 }
 
-func NewDBExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewDBExporter(target *config.Target, logger log.Logger) Collector {
 	return &DBCollector{
 		TotalSpace: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "space_total_bytes"),
 			"DB total space in bytes", []string{"dbname"}, nil),
@@ -116,9 +112,8 @@ func NewDBExporter(target *config.Target, logger log.Logger, useCache bool) Coll
 			"DB pkg hit ratio", []string{"dbname"}, nil),
 		LastBackup: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "last_backup_time"),
 			"Time since last backup in epoch", []string{"dbname"}, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -176,22 +171,13 @@ func (c *DBCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *DBCollector) collect() ([]DBMetric, error) {
-	var err error
-	var out string
-	var metrics []DBMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*dbTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcDBExec(c.target, ctx, c.logger)
+	out, err := DsmadmcDBExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = dbReadCache(c.target.Name)
-		}
-		return metrics, err
+		return nil, err
 	}
-	metrics = dbParse(out, c.logger)
-	if c.useCache {
-		dbWriteCache(c.target.Name, metrics)
-	}
+	metrics := dbParse(out, c.logger)
 	return metrics, nil
 }
 
@@ -245,20 +231,4 @@ func getDBFields() []string {
 	}
 	sort.Strings(fields)
 	return fields
-}
-
-func dbReadCache(target string) []DBMetric {
-	var metrics []DBMetric
-	dbCacheMutex.RLock()
-	if cache, ok := dbCache[target]; ok {
-		metrics = cache
-	}
-	dbCacheMutex.RUnlock()
-	return metrics
-}
-
-func dbWriteCache(target string, metrics []DBMetric) {
-	dbCacheMutex.Lock()
-	dbCache[target] = metrics
-	dbCacheMutex.Unlock()
 }

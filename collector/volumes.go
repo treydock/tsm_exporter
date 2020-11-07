@@ -18,7 +18,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -32,8 +31,6 @@ var (
 	volumesTimeout          = kingpin.Flag("collector.volumes.timeout", "Timeout for collecting volumes information").Default("10").Int()
 	volumesClassnameExclude = kingpin.Flag("collector.volumes.classname-exclude", "Regexp of classname of exclude").Default("").String()
 	DsmadmcVolumesExec      = dsmadmcVolumes
-	volumesCache            = map[string][]VolumeMetric{}
-	volumesCacheMutex       = sync.RWMutex{}
 )
 
 type VolumeMetric struct {
@@ -51,14 +48,13 @@ type VolumesCollector struct {
 	capacity    *prometheus.Desc
 	target      *config.Target
 	logger      log.Logger
-	useCache    bool
 }
 
 func init() {
 	registerCollector("volumes", true, NewVolumesExporter)
 }
 
-func NewVolumesExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewVolumesExporter(target *config.Target, logger log.Logger) Collector {
 	return &VolumesCollector{
 		unavailable: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volumes", "unavailable"),
 			"Number of unavailable volumes", nil, nil),
@@ -68,9 +64,8 @@ func NewVolumesExporter(target *config.Target, logger log.Logger, useCache bool)
 			"Volume percent utilized", []string{"name", "classname"}, nil),
 		capacity: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volume", "estimated_capacity_bytes"),
 			"Volume estimated capacity", []string{"name", "classname"}, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -106,7 +101,7 @@ func (c *VolumesCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(c.utilized, prometheus.GaugeValue, m.utilized, m.name, m.classname)
 		ch <- prometheus.MustNewConstMetric(c.capacity, prometheus.GaugeValue, m.capacity, m.name, m.classname)
 	}
-	if err == nil || c.useCache {
+	if err == nil {
 		ch <- prometheus.MustNewConstMetric(c.unavailable, prometheus.GaugeValue, unavailable)
 		ch <- prometheus.MustNewConstMetric(c.readonly, prometheus.GaugeValue, readonly)
 	}
@@ -117,22 +112,13 @@ func (c *VolumesCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *VolumesCollector) collect() ([]VolumeMetric, error) {
-	var err error
-	var out string
-	var metrics []VolumeMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*volumesTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcVolumesExec(c.target, ctx, c.logger)
+	out, err := DsmadmcVolumesExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = volumesReadCache(c.target.Name)
-		}
-		return metrics, err
+		return nil, err
 	}
-	metrics = volumesParse(out, c.logger)
-	if c.useCache {
-		volumesWriteCache(c.target.Name, metrics)
-	}
+	metrics := volumesParse(out, c.logger)
 	return metrics, nil
 }
 
@@ -175,20 +161,4 @@ func volumesParse(out string, logger log.Logger) []VolumeMetric {
 		metrics = append(metrics, metric)
 	}
 	return metrics
-}
-
-func volumesReadCache(target string) []VolumeMetric {
-	var metrics []VolumeMetric
-	volumesCacheMutex.RLock()
-	if cache, ok := volumesCache[target]; ok {
-		metrics = cache
-	}
-	volumesCacheMutex.RUnlock()
-	return metrics
-}
-
-func volumesWriteCache(target string, metrics []VolumeMetric) {
-	volumesCacheMutex.Lock()
-	volumesCache[target] = metrics
-	volumesCacheMutex.Unlock()
 }

@@ -16,7 +16,6 @@ package collector
 import (
 	"context"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -29,8 +28,6 @@ import (
 var (
 	statusTimeout     = kingpin.Flag("collector.status.timeout", "Timeout for collecting status information").Default("5").Int()
 	DsmadmcStatusExec = dsmadmcStatus
-	statusCache       = map[string]StatusMetric{}
-	statusCacheMutex  = sync.RWMutex{}
 )
 
 type StatusMetric struct {
@@ -40,23 +37,21 @@ type StatusMetric struct {
 }
 
 type StatusCollector struct {
-	status   *prometheus.Desc
-	target   *config.Target
-	logger   log.Logger
-	useCache bool
+	status *prometheus.Desc
+	target *config.Target
+	logger log.Logger
 }
 
 func init() {
 	registerCollector("status", true, NewStatusExporter)
 }
 
-func NewStatusExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewStatusExporter(target *config.Target, logger log.Logger) Collector {
 	return &StatusCollector{
 		status: prometheus.NewDesc(prometheus.BuildFQName(namespace, "", "status"),
 			"Status of TSM, 1=online 0=failure", []string{"servername", "reason"}, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -83,22 +78,13 @@ func (c *StatusCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *StatusCollector) collect() (StatusMetric, error) {
-	var err error
-	var out string
-	var metrics StatusMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*statusTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcStatusExec(c.target, ctx, c.logger)
+	out, err := DsmadmcStatusExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = statusReadCache(c.target.Name)
-		}
-		return metrics, err
+		return StatusMetric{}, err
 	}
-	metrics = statusParse(out, c.logger)
-	if c.useCache {
-		statusWriteCache(c.target.Name, metrics)
-	}
+	metrics := statusParse(out, c.logger)
 	return metrics, nil
 }
 
@@ -125,20 +111,4 @@ func statusParse(out string, logger log.Logger) StatusMetric {
 		metric.reason = "servername not found"
 	}
 	return metric
-}
-
-func statusReadCache(target string) StatusMetric {
-	var metrics StatusMetric
-	statusCacheMutex.RLock()
-	if cache, ok := statusCache[target]; ok {
-		metrics = cache
-	}
-	statusCacheMutex.RUnlock()
-	return metrics
-}
-
-func statusWriteCache(target string, metrics StatusMetric) {
-	statusCacheMutex.Lock()
-	statusCache[target] = metrics
-	statusCacheMutex.Unlock()
 }

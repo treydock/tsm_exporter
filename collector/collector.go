@@ -34,12 +34,11 @@ const (
 )
 
 var (
-	exporterUseCache = kingpin.Flag("exporter.use-cache", "Use cached metrics if commands timeout or produce errors").Default("false").Bool()
-	dsmLogDir        = kingpin.Flag("path.dsm_log.dir", "Directory to use for DSM_LOG environment variable").Default("/tmp").String()
-	execCommand      = exec.CommandContext
-	collectorState   = make(map[string]bool)
-	factories        = make(map[string]func(target *config.Target, logger log.Logger, useCache bool) Collector)
-	collectDuration  = prometheus.NewDesc(
+	dsmLogDir       = kingpin.Flag("path.dsm_log.dir", "Directory to use for DSM_LOG environment variable").Default("/tmp").String()
+	execCommand     = exec.CommandContext
+	collectorState  = make(map[string]bool)
+	factories       = make(map[string]func(target *config.Target, logger log.Logger) Collector)
+	collectDuration = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "exporter", "collector_duration_seconds"),
 		"Collector time duration.",
 		[]string{"collector"}, nil)
@@ -63,7 +62,7 @@ type TSMCollector struct {
 	Collectors map[string]Collector
 }
 
-func registerCollector(collector string, isDefaultEnabled bool, factory func(target *config.Target, logger log.Logger, useCache bool) Collector) {
+func registerCollector(collector string, isDefaultEnabled bool, factory func(target *config.Target, logger log.Logger) Collector) {
 	collectorState[collector] = isDefaultEnabled
 	factories[collector] = factory
 }
@@ -79,7 +78,7 @@ func NewCollector(target *config.Target, logger log.Logger) *TSMCollector {
 		}
 		var collector Collector
 		if enable {
-			collector = factories[key](target, log.With(logger, "collector", key, "target", target.Name), *exporterUseCache)
+			collector = factories[key](target, log.With(logger, "collector", key, "target", target.Name))
 			collectors[key] = collector
 		}
 	}

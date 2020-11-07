@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -30,8 +29,6 @@ import (
 var (
 	drivesTimeout     = kingpin.Flag("collector.drives.timeout", "Timeout for collecting drives information").Default("5").Int()
 	DsmadmcDrivesExec = dsmadmcDrives
-	drivesCache       = map[string][]DriveMetric{}
-	drivesCacheMutex  = sync.RWMutex{}
 )
 
 type DriveMetric struct {
@@ -43,19 +40,18 @@ type DriveMetric struct {
 }
 
 type DrivesCollector struct {
-	online   *prometheus.Desc
-	state    *prometheus.Desc
-	volume   *prometheus.Desc
-	target   *config.Target
-	logger   log.Logger
-	useCache bool
+	online *prometheus.Desc
+	state  *prometheus.Desc
+	volume *prometheus.Desc
+	target *config.Target
+	logger log.Logger
 }
 
 func init() {
 	registerCollector("drives", true, NewDrivesExporter)
 }
 
-func NewDrivesExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewDrivesExporter(target *config.Target, logger log.Logger) Collector {
 	return &DrivesCollector{
 		online: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drive", "online"),
 			"Inidicates if the drive is online, 1=online, 0=offline", []string{"library", "name"}, nil),
@@ -63,9 +59,8 @@ func NewDrivesExporter(target *config.Target, logger log.Logger, useCache bool) 
 			"Current state of the drive", []string{"library", "name", "state"}, nil),
 		volume: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drive", "volume_info"),
 			"Current volume of the drive", []string{"library", "name", "volume"}, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -100,22 +95,13 @@ func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *DrivesCollector) collect() ([]DriveMetric, error) {
-	var err error
-	var out string
-	var metrics []DriveMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*drivesTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcDrivesExec(c.target, ctx, c.logger)
+	out, err := DsmadmcDrivesExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = drivesReadCache(c.target.Name)
-		}
-		return metrics, err
+		return nil, err
 	}
-	metrics = drivesParse(out, c.logger)
-	if c.useCache {
-		drivesWriteCache(c.target.Name, metrics)
-	}
+	metrics := drivesParse(out, c.logger)
 	return metrics, nil
 }
 
@@ -150,20 +136,4 @@ func drivesParse(out string, logger log.Logger) []DriveMetric {
 		metrics = append(metrics, metric)
 	}
 	return metrics
-}
-
-func drivesReadCache(target string) []DriveMetric {
-	var metrics []DriveMetric
-	drivesCacheMutex.RLock()
-	if cache, ok := drivesCache[target]; ok {
-		metrics = cache
-	}
-	drivesCacheMutex.RUnlock()
-	return metrics
-}
-
-func drivesWriteCache(target string, metrics []DriveMetric) {
-	drivesCacheMutex.Lock()
-	drivesCache[target] = metrics
-	drivesCacheMutex.Unlock()
 }

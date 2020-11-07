@@ -198,7 +198,7 @@ func TestReplicationViewsCollector(t *testing.T) {
 	tsm_replication_replicated_files{fsname="/TEST4",nodename="TEST2DB2"} 2
 	tsm_replication_replicated_files{fsname="/srv",nodename="TEST2DB.DOMAIN"} 10
 	`
-	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -228,7 +228,7 @@ func TestReplicationViewsCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="replicationview"} 0
 	`
-	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -258,7 +258,7 @@ func TestReplicationViewsCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="replicationview"} 1
 	`
-	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -269,84 +269,6 @@ func TestReplicationViewsCollectorTimeout(t *testing.T) {
 		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
 		"tsm_replication_replicated_bytes", "tsm_replication_replicated_files",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-}
-
-func TestReplicationViewsCollectorCache(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
-		t.Fatal(err)
-	}
-	cache := false
-	useReplicationViewMetricCache = &cache
-	DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockReplicationViewStdout, nil
-	}
-	expected := `
-	# HELP tsm_replication_duration_seconds Amount of time taken to complete the most recent replication
-	# TYPE tsm_replication_duration_seconds gauge
-	tsm_replication_duration_seconds{fsname="/TEST2CONF",nodename="TEST2DB2"} 19276
-	tsm_replication_duration_seconds{fsname="/TEST4",nodename="TEST2DB2"} 19276
-	tsm_replication_duration_seconds{fsname="/srv",nodename="TEST2DB.DOMAIN"} 43
-	# HELP tsm_replication_not_completed Number of replications not completed for today
-	# TYPE tsm_replication_not_completed gauge
-	tsm_replication_not_completed{fsname="/TEST2CONF",nodename="TEST2DB2"} 0
-	tsm_replication_not_completed{fsname="/TEST4",nodename="TEST2DB2"} 0
-	tsm_replication_not_completed{fsname="/srv",nodename="TEST2DB.DOMAIN"} 0
-	# HELP tsm_replication_replicated_bytes Amount of data replicated in bytes
-	# TYPE tsm_replication_replicated_bytes gauge
-	tsm_replication_replicated_bytes{fsname="/TEST2CONF",nodename="TEST2DB2"} 167543418
-	tsm_replication_replicated_bytes{fsname="/TEST4",nodename="TEST2DB2"} 1052637876956
-	tsm_replication_replicated_bytes{fsname="/srv",nodename="TEST2DB.DOMAIN"} 245650752
-	# HELP tsm_replication_replicated_files Number of files replicated
-	# TYPE tsm_replication_replicated_files gauge
-	tsm_replication_replicated_files{fsname="/TEST2CONF",nodename="TEST2DB2"} 2
-	tsm_replication_replicated_files{fsname="/TEST4",nodename="TEST2DB2"} 2
-	tsm_replication_replicated_files{fsname="/srv",nodename="TEST2DB.DOMAIN"} 10
-	`
-	errorMetric := `
-    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
-    # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="replicationview"} 1
-	`
-	timeoutMetric := `
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="replicationview"} 1
-	`
-	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger(), true)
-	gatherers := setupGatherer(collector)
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 21 {
-		t.Errorf("Unexpected collection count %d, expected 21", val)
-	}
-	DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", fmt.Errorf("Error")
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 21 {
-		t.Errorf("Unexpected collection count %d, expected 21", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
-		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
-		"tsm_replication_replicated_bytes", "tsm_replication_replicated_files",
-		"tsm_exporter_collect_error"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-	DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", context.DeadlineExceeded
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 21 {
-		t.Errorf("Unexpected collection count %d, expected 21", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),
-		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
-		"tsm_replication_replicated_bytes", "tsm_replication_replicated_files",
-		"tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

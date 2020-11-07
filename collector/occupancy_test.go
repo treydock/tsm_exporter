@@ -69,7 +69,7 @@ func TestOccupancysCollector(t *testing.T) {
 	tsm_occupancy_physical_bytes{filespace="/fs/project",nodename="PROJECT",storagepool="PTGPFS"} 1894324669691986
 	tsm_occupancy_physical_bytes{filespace="/home",nodename="NETAPPUSER",storagepool="PFNETAPP"} 62851645.44
 	`
-	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -98,7 +98,7 @@ func TestOccupancysCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="occupancy"} 0
 	`
-	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -127,7 +127,7 @@ func TestOccupancysCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="occupancy"} 1
 	`
-	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -137,70 +137,6 @@ func TestOccupancysCollectorTimeout(t *testing.T) {
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_occupancy_files", "tsm_occupancy_logical_bytes", "tsm_occupancy_physical_bytes",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-}
-
-func TestOccupancysCollectorCache(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
-		t.Fatal(err)
-	}
-	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockOccupancyStdout, nil
-	}
-	expected := `
-	# HELP tsm_occupancy_files Number of files
-	# TYPE tsm_occupancy_files gauge
-	tsm_occupancy_files{filespace="/fs/project",nodename="PROJECT",storagepool="PTGPFS"} 316487756
-	tsm_occupancy_files{filespace="/home",nodename="NETAPPUSER",storagepool="PFNETAPP"} 3
-	# HELP tsm_occupancy_logical_bytes Logical space occupied
-	# TYPE tsm_occupancy_logical_bytes gauge
-	tsm_occupancy_logical_bytes{filespace="/fs/project",nodename="PROJECT",storagepool="PTGPFS"} 1893490460154920.96
-	tsm_occupancy_logical_bytes{filespace="/home",nodename="NETAPPUSER",storagepool="PFNETAPP"} 62851645.44
-	# HELP tsm_occupancy_physical_bytes Physical space occupied
-	# TYPE tsm_occupancy_physical_bytes gauge
-	tsm_occupancy_physical_bytes{filespace="/fs/project",nodename="PROJECT",storagepool="PTGPFS"} 1894324669691986
-	tsm_occupancy_physical_bytes{filespace="/home",nodename="NETAPPUSER",storagepool="PFNETAPP"} 62851645.44
-	`
-	errorMetric := `
-    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
-    # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="occupancy"} 1
-	`
-	timeoutMetric := `
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="occupancy"} 1
-	`
-	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger(), true)
-	gatherers := setupGatherer(collector)
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 9 {
-		t.Errorf("Unexpected collection count %d, expected 9", val)
-	}
-	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", fmt.Errorf("Error")
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 9 {
-		t.Errorf("Unexpected collection count %d, expected 9", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
-		"tsm_occupancy_files", "tsm_occupancy_logical_bytes", "tsm_occupancy_physical_bytes", "tsm_exporter_collect_error"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", context.DeadlineExceeded
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 9 {
-		t.Errorf("Unexpected collection count %d, expected 9", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),
-		"tsm_occupancy_files", "tsm_occupancy_logical_bytes", "tsm_occupancy_physical_bytes", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

@@ -20,7 +20,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -33,8 +32,6 @@ import (
 var (
 	stgpoolsTimeout        = kingpin.Flag("collector.stgpools.timeout", "Timeout for collecting stgpools information").Default("10").Int()
 	DsmadmcStoragePoolExec = dsmadmcStoragePool
-	stgpoolsCache          = map[string][]StoragePoolMetric{}
-	stgpoolsCacheMutex     = sync.RWMutex{}
 	stgpoolsMap            = map[string]string{
 		"STGPOOL_NAME": "Name",
 		"POOLTYPE":     "PoolType",
@@ -56,20 +53,18 @@ type StoragePoolCollector struct {
 	PercentUtilized *prometheus.Desc
 	target          *config.Target
 	logger          log.Logger
-	useCache        bool
 }
 
 func init() {
 	registerCollector("stgpools", true, NewStoragePoolExporter)
 }
 
-func NewStoragePoolExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewStoragePoolExporter(target *config.Target, logger log.Logger) Collector {
 	return &StoragePoolCollector{
 		PercentUtilized: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "utilized_percent"),
 			"Storage pool utilized percent", []string{"name", "pooltype", "classname", "storagetype"}, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -100,22 +95,13 @@ func (c *StoragePoolCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *StoragePoolCollector) collect() ([]StoragePoolMetric, error) {
-	var err error
-	var out string
-	var metrics []StoragePoolMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*stgpoolsTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcStoragePoolExec(c.target, ctx, c.logger)
+	out, err := DsmadmcStoragePoolExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = stgpoolsReadCache(c.target.Name)
-		}
-		return metrics, err
+		return nil, err
 	}
-	metrics = stgpoolsParse(out, c.logger)
-	if c.useCache {
-		stgpoolsWriteCache(c.target.Name, metrics)
-	}
+	metrics := stgpoolsParse(out, c.logger)
 	return metrics, nil
 }
 
@@ -169,20 +155,4 @@ func getStoragePoolFields() []string {
 	}
 	sort.Strings(fields)
 	return fields
-}
-
-func stgpoolsReadCache(target string) []StoragePoolMetric {
-	var metrics []StoragePoolMetric
-	stgpoolsCacheMutex.RLock()
-	if cache, ok := stgpoolsCache[target]; ok {
-		metrics = cache
-	}
-	stgpoolsCacheMutex.RUnlock()
-	return metrics
-}
-
-func stgpoolsWriteCache(target string, metrics []StoragePoolMetric) {
-	stgpoolsCacheMutex.Lock()
-	stgpoolsCache[target] = metrics
-	stgpoolsCacheMutex.Unlock()
 }

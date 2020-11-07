@@ -31,8 +31,6 @@ var (
 	eventsTimeout            = kingpin.Flag("collector.events.timeout", "Timeout for collecting events information").Default("5").Int()
 	useEventDurationCache    = kingpin.Flag("collector.events.duration-cache", "Cache event durations").Default("true").Bool()
 	DsmadmcEventsExec        = dsmadmcEvents
-	eventsCache              = map[string]map[string]EventMetric{}
-	eventsCacheMutex         = sync.RWMutex{}
 	eventsDurationCache      = map[string]float64{}
 	eventsDurationCacheMutex = sync.RWMutex{}
 )
@@ -48,22 +46,20 @@ type EventsCollector struct {
 	duration     *prometheus.Desc
 	target       *config.Target
 	logger       log.Logger
-	useCache     bool
 }
 
 func init() {
 	registerCollector("events", true, NewEventsExporter)
 }
 
-func NewEventsExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewEventsExporter(target *config.Target, logger log.Logger) Collector {
 	return &EventsCollector{
 		notCompleted: prometheus.NewDesc(prometheus.BuildFQName(namespace, "schedule", "not_completed"),
 			"Number of scheduled events not completed for today", []string{"schedule"}, nil),
 		duration: prometheus.NewDesc(prometheus.BuildFQName(namespace, "schedule", "duration_seconds"),
 			"Amount of time taken to complete scheduled event for today, in seconds", []string{"schedule"}, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -96,22 +92,14 @@ func (c *EventsCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *EventsCollector) collect() (map[string]EventMetric, error) {
-	var err error
-	var out string
 	metrics := make(map[string]EventMetric)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*eventsTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcEventsExec(c.target, ctx, c.logger)
+	out, err := DsmadmcEventsExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = eventsReadCache(c.target.Name)
-		}
 		return metrics, err
 	}
 	metrics = eventsParse(out, c.target, *useEventDurationCache, c.logger)
-	if c.useCache {
-		eventsWriteCache(c.target.Name, metrics)
-	}
 	return metrics, nil
 }
 
@@ -180,20 +168,4 @@ func eventsParse(out string, target *config.Target, useCache bool, logger log.Lo
 		metrics[sched] = metric
 	}
 	return metrics
-}
-
-func eventsReadCache(target string) map[string]EventMetric {
-	metrics := make(map[string]EventMetric)
-	eventsCacheMutex.RLock()
-	if cache, ok := eventsCache[target]; ok {
-		metrics = cache
-	}
-	eventsCacheMutex.RUnlock()
-	return metrics
-}
-
-func eventsWriteCache(target string, metrics map[string]EventMetric) {
-	eventsCacheMutex.Lock()
-	eventsCache[target] = metrics
-	eventsCacheMutex.Unlock()
 }

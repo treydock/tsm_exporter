@@ -97,7 +97,7 @@ func TestVolumeUsagesCollector(t *testing.T) {
 		"LTO6": "^E",
 		"LTO7": "^F",
 	}}
-	collector := NewVolumeUsagesExporter(target, log.NewNopLogger(), false)
+	collector := NewVolumeUsagesExporter(target, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -126,7 +126,7 @@ func TestVolumeUsagesCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="volumeusage"} 0
 	`
-	collector := NewVolumeUsagesExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewVolumeUsagesExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -155,7 +155,7 @@ func TestVolumeUsagesCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="volumeusage"} 1
 	`
-	collector := NewVolumeUsagesExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewVolumeUsagesExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -165,67 +165,6 @@ func TestVolumeUsagesCollectorTimeout(t *testing.T) {
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_volume_usage",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-}
-
-func TestVolumeUsagesCollectorCache(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
-		t.Fatal(err)
-	}
-	DsmadmcVolumeUsagesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockVolumeUsageStdout, nil
-	}
-	expected := `
-	# HELP tsm_volume_usage Number of volumes used by node name
-	# TYPE tsm_volume_usage gauge
-	tsm_volume_usage{nodename="ESS2_ENC",volumename="LTO6"} 2
-	tsm_volume_usage{nodename="NETAPPUSER2",volumename="LTO6"} 1
-	tsm_volume_usage{nodename="NETAPPUSER2",volumename="LTO7"} 3
-	`
-	errorMetric := `
-    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
-    # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="volumeusage"} 1
-	`
-	timeoutMetric := `
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="volumeusage"} 1
-	`
-	target := &config.Target{VolumeUsageMap: map[string]string{
-		"LTO6": "^E",
-		"LTO7": "^F",
-	}}
-	collector := NewVolumeUsagesExporter(target, log.NewNopLogger(), true)
-	gatherers := setupGatherer(collector)
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 6 {
-		t.Errorf("Unexpected collection count %d, expected 6", val)
-	}
-	DsmadmcVolumeUsagesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", fmt.Errorf("Error")
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 6 {
-		t.Errorf("Unexpected collection count %d, expected 6", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
-		"tsm_volume_usage", "tsm_exporter_collect_error"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-	DsmadmcVolumeUsagesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", context.DeadlineExceeded
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 6 {
-		t.Errorf("Unexpected collection count %d, expected 6", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),
-		"tsm_volume_usage", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

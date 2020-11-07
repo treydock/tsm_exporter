@@ -65,7 +65,7 @@ func TestStatusCollector(t *testing.T) {
     # TYPE tsm_status gauge
     tsm_status{reason="",servername="SP03"} 1
 	`
-	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -91,7 +91,7 @@ func TestStatusCollectorError(t *testing.T) {
     # TYPE tsm_status gauge
     tsm_status{reason="error",servername=""} 0
 	`
-	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -117,7 +117,7 @@ func TestStatusCollectorTimeout(t *testing.T) {
     # TYPE tsm_status gauge
     tsm_status{reason="timeout",servername=""} 0
 	`
-	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -127,56 +127,6 @@ func TestStatusCollectorTimeout(t *testing.T) {
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_status",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-}
-
-func TestStatusCollectorCache(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
-		t.Fatal(err)
-	}
-	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockStatusStdout, nil
-	}
-	errorMetric := `
-    # HELP tsm_status Status of TSM, 1=online 0=failure
-    # TYPE tsm_status gauge
-    tsm_status{reason="error",servername="SP03"} 0
-	`
-	timeoutMetric := `
-    # HELP tsm_status Status of TSM, 1=online 0=failure
-    # TYPE tsm_status gauge
-    tsm_status{reason="timeout",servername="SP03"} 0
-	`
-	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger(), true)
-	gatherers := setupGatherer(collector)
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 2 {
-		t.Errorf("Unexpected collection count %d, expected 2", val)
-	}
-	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", fmt.Errorf("Error")
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 2 {
-		t.Errorf("Unexpected collection count %d, expected 2", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric),
-		"tsm_status", "tsm_exporter_collect_error"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", context.DeadlineExceeded
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 2 {
-		t.Errorf("Unexpected collection count %d, expected 2", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric),
-		"tsm_status", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

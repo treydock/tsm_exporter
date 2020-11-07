@@ -20,7 +20,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -33,8 +32,6 @@ import (
 var (
 	occupancyTimeout      = kingpin.Flag("collector.occupancy.timeout", "Timeout for collecting occupancy information").Default("10").Int()
 	DsmadmcOccupancysExec = dsmadmcOccupancys
-	occupancyCache        = map[string][]OccupancyMetric{}
-	occupancyCacheMutex   = sync.RWMutex{}
 	occupancyMap          = map[string]string{
 		"NODE_NAME":      "NodeName",
 		"FILESPACE_NAME": "FilespaceName",
@@ -61,14 +58,13 @@ type OccupancysCollector struct {
 	files    *prometheus.Desc
 	target   *config.Target
 	logger   log.Logger
-	useCache bool
 }
 
 func init() {
 	registerCollector("occupancy", true, NewOccupancysExporter)
 }
 
-func NewOccupancysExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewOccupancysExporter(target *config.Target, logger log.Logger) Collector {
 	return &OccupancysCollector{
 		physical: prometheus.NewDesc(prometheus.BuildFQName(namespace, "occupancy", "physical_bytes"),
 			"Physical space occupied", []string{"nodename", "filespace", "storagepool"}, nil),
@@ -76,9 +72,8 @@ func NewOccupancysExporter(target *config.Target, logger log.Logger, useCache bo
 			"Logical space occupied", []string{"nodename", "filespace", "storagepool"}, nil),
 		files: prometheus.NewDesc(prometheus.BuildFQName(namespace, "occupancy", "files"),
 			"Number of files", []string{"nodename", "filespace", "storagepool"}, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -113,22 +108,13 @@ func (c *OccupancysCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *OccupancysCollector) collect() ([]OccupancyMetric, error) {
-	var err error
-	var out string
-	var metrics []OccupancyMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*occupancyTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcOccupancysExec(c.target, ctx, c.logger)
+	out, err := DsmadmcOccupancysExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = occupancyReadCache(c.target.Name)
-		}
-		return metrics, err
+		return nil, err
 	}
-	metrics = occupancyParse(out, c.logger)
-	if c.useCache {
-		occupancyWriteCache(c.target.Name, metrics)
-	}
+	metrics := occupancyParse(out, c.logger)
 	return metrics, nil
 }
 
@@ -194,20 +180,4 @@ func getOccupancyFields() []string {
 	}
 	sort.Strings(fields)
 	return fields
-}
-
-func occupancyReadCache(target string) []OccupancyMetric {
-	var metrics []OccupancyMetric
-	occupancyCacheMutex.RLock()
-	if cache, ok := occupancyCache[target]; ok {
-		metrics = cache
-	}
-	occupancyCacheMutex.RUnlock()
-	return metrics
-}
-
-func occupancyWriteCache(target string, metrics []OccupancyMetric) {
-	occupancyCacheMutex.Lock()
-	occupancyCache[target] = metrics
-	occupancyCacheMutex.Unlock()
 }
