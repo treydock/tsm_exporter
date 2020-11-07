@@ -54,11 +54,11 @@ func init() {
 func NewDrivesExporter(target *config.Target, logger log.Logger) Collector {
 	return &DrivesCollector{
 		online: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drive", "online"),
-			"Inidicates if the drive is online, 1=online, 0=offline", []string{"library", "name"}, nil),
+			"Inidicates if the drive is online, 1=online, 0=offline", []string{"library", "drive"}, nil),
 		state: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drive", "state_info"),
-			"Current state of the drive", []string{"library", "name", "state"}, nil),
+			"Current state of the drive", []string{"library", "drive", "state"}, nil),
 		volume: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drive", "volume_info"),
-			"Current volume of the drive", []string{"library", "name", "volume"}, nil),
+			"Current volume of the drive", []string{"library", "drive", "volume"}, nil),
 		target: target,
 		logger: logger,
 	}

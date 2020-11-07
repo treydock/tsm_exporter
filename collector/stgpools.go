@@ -62,7 +62,7 @@ func init() {
 func NewStoragePoolExporter(target *config.Target, logger log.Logger) Collector {
 	return &StoragePoolCollector{
 		PercentUtilized: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "utilized_percent"),
-			"Storage pool utilized percent", []string{"name", "pooltype", "classname", "storagetype"}, nil),
+			"Storage pool utilized percent", []string{"storagepool", "pooltype", "classname", "storagetype"}, nil),
 		target: target,
 		logger: logger,
 	}
