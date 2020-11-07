@@ -17,7 +17,6 @@ import (
 	"context"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -30,8 +29,6 @@ import (
 var (
 	volumeusageTimeout      = kingpin.Flag("collector.volumeusage.timeout", "Timeout for collecting volumeusage information").Default("5").Int()
 	DsmadmcVolumeUsagesExec = dsmadmcVolumeUsages
-	volumeusageCache        = map[string][]VolumeUsageMetric{}
-	volumeusageCacheMutex   = sync.RWMutex{}
 )
 
 type VolumeUsageMetric struct {
@@ -40,23 +37,21 @@ type VolumeUsageMetric struct {
 }
 
 type VolumeUsagesCollector struct {
-	usage    *prometheus.Desc
-	target   *config.Target
-	logger   log.Logger
-	useCache bool
+	usage  *prometheus.Desc
+	target *config.Target
+	logger log.Logger
 }
 
 func init() {
 	registerCollector("volumeusage", true, NewVolumeUsagesExporter)
 }
 
-func NewVolumeUsagesExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewVolumeUsagesExporter(target *config.Target, logger log.Logger) Collector {
 	return &VolumeUsagesCollector{
 		usage: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volume", "usage"),
 			"Number of volumes used by node name", []string{"nodename", "volumename"}, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -89,22 +84,13 @@ func (c *VolumeUsagesCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *VolumeUsagesCollector) collect() ([]VolumeUsageMetric, error) {
-	var err error
-	var out string
-	var metrics []VolumeUsageMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*volumeusageTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcVolumeUsagesExec(c.target, ctx, c.logger)
+	out, err := DsmadmcVolumeUsagesExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = volumeusageReadCache(c.target.Name)
-		}
-		return metrics, err
+		return nil, err
 	}
-	metrics = volumeusageParse(out, c.target, c.logger)
-	if c.useCache {
-		volumeusageWriteCache(c.target.Name, metrics)
-	}
+	metrics := volumeusageParse(out, c.target, c.logger)
 	return metrics, nil
 }
 
@@ -152,20 +138,4 @@ func volumeusageParse(out string, target *config.Target, logger log.Logger) []Vo
 		metrics = append(metrics, metric)
 	}
 	return metrics
-}
-
-func volumeusageReadCache(target string) []VolumeUsageMetric {
-	var metrics []VolumeUsageMetric
-	volumeusageCacheMutex.RLock()
-	if cache, ok := volumeusageCache[target]; ok {
-		metrics = cache
-	}
-	volumeusageCacheMutex.RUnlock()
-	return metrics
-}
-
-func volumeusageWriteCache(target string, metrics []VolumeUsageMetric) {
-	volumeusageCacheMutex.Lock()
-	volumeusageCache[target] = metrics
-	volumeusageCacheMutex.Unlock()
 }

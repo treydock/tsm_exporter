@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -31,8 +30,6 @@ import (
 var (
 	libvolumesTimeout     = kingpin.Flag("collector.libvolumes.timeout", "Timeout for collecting libvolumes information").Default("5").Int()
 	DsmadmcLibVolumesExec = dsmadmcLibVolumes
-	libvolumesCache       = map[string][]LibVolumeMetric{}
-	libvolumesCacheMutex  = sync.RWMutex{}
 )
 
 type LibVolumeMetric struct {
@@ -42,26 +39,24 @@ type LibVolumeMetric struct {
 }
 
 type LibVolumesCollector struct {
-	scratch  *prometheus.Desc
-	media    *prometheus.Desc
-	target   *config.Target
-	logger   log.Logger
-	useCache bool
+	scratch *prometheus.Desc
+	media   *prometheus.Desc
+	target  *config.Target
+	logger  log.Logger
 }
 
 func init() {
 	registerCollector("libvolumes", true, NewLibVolumesExporter)
 }
 
-func NewLibVolumesExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewLibVolumesExporter(target *config.Target, logger log.Logger) Collector {
 	return &LibVolumesCollector{
 		scratch: prometheus.NewDesc(prometheus.BuildFQName(namespace, "libvolume", "scratch"),
 			"Number of scratch tapes", nil, nil),
 		media: prometheus.NewDesc(prometheus.BuildFQName(namespace, "libvolume", "media"),
 			"Number of tapes", []string{"mediatype", "status"}, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -90,7 +85,7 @@ func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 		ch <- prometheus.MustNewConstMetric(c.media, prometheus.GaugeValue, m.count, m.mediatype, m.status)
 	}
-	if err == nil || c.useCache {
+	if err == nil {
 		ch <- prometheus.MustNewConstMetric(c.scratch, prometheus.GaugeValue, scratch)
 	}
 
@@ -100,22 +95,13 @@ func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *LibVolumesCollector) collect() ([]LibVolumeMetric, error) {
-	var err error
-	var out string
-	var metrics []LibVolumeMetric
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*libvolumesTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcLibVolumesExec(c.target, ctx, c.logger)
+	out, err := DsmadmcLibVolumesExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = libvolumesReadCache(c.target.Name)
-		}
-		return metrics, err
+		return nil, err
 	}
-	metrics = libvolumesParse(out, c.logger)
-	if c.useCache {
-		libvolumesWriteCache(c.target.Name, metrics)
-	}
+	metrics := libvolumesParse(out, c.logger)
 	return metrics, nil
 }
 
@@ -149,20 +135,4 @@ func libvolumesParse(out string, logger log.Logger) []LibVolumeMetric {
 		metrics = append(metrics, metric)
 	}
 	return metrics
-}
-
-func libvolumesReadCache(target string) []LibVolumeMetric {
-	var metrics []LibVolumeMetric
-	libvolumesCacheMutex.RLock()
-	if cache, ok := libvolumesCache[target]; ok {
-		metrics = cache
-	}
-	libvolumesCacheMutex.RUnlock()
-	return metrics
-}
-
-func libvolumesWriteCache(target string, metrics []LibVolumeMetric) {
-	libvolumesCacheMutex.Lock()
-	libvolumesCache[target] = metrics
-	libvolumesCacheMutex.Unlock()
 }

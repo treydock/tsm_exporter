@@ -79,7 +79,7 @@ func TestDrivesCollector(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="drives"} 0
 	`
-	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -108,7 +108,7 @@ func TestDrivesCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="drives"} 0
 	`
-	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -137,7 +137,7 @@ func TestDrivesCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="drives"} 1
 	`
-	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -147,76 +147,6 @@ func TestDrivesCollectorTimeout(t *testing.T) {
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_drive_online", "tsm_drive_state_info", "tsm_drive_volume_info",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-}
-
-func TestDrivesCollectorCache(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
-		t.Fatal(err)
-	}
-	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockDriveStdout, nil
-	}
-	expected := `
-	# HELP tsm_drive_online Inidicates if the drive is online, 1=online, 0=offline
-	# TYPE tsm_drive_online gauge
-	tsm_drive_online{library="LIB1",name="TAPE10"} 1
-	tsm_drive_online{library="LIB1",name="TAPE11"} 1
-	tsm_drive_online{library="LIBENC",name="TAPE00"} 1
-	tsm_drive_online{library="LIBENC",name="TAPE01"} 0
-	# HELP tsm_drive_state_info Current state of the drive
-	# TYPE tsm_drive_state_info gauge
-	tsm_drive_state_info{library="LIB1",name="TAPE10",state="loaded"} 1
-	tsm_drive_state_info{library="LIB1",name="TAPE11",state="loaded"} 1
-	tsm_drive_state_info{library="LIBENC",name="TAPE00",state="empty"} 1
-	tsm_drive_state_info{library="LIBENC",name="TAPE01",state="empty"} 1
-	# HELP tsm_drive_volume_info Current volume of the drive
-	# TYPE tsm_drive_volume_info gauge
-	tsm_drive_volume_info{library="LIB1",name="TAPE10",volume="FOO1"} 1
-	tsm_drive_volume_info{library="LIB1",name="TAPE11",volume="FOO2"} 1
-	tsm_drive_volume_info{library="LIBENC",name="TAPE00",volume=""} 1
-	tsm_drive_volume_info{library="LIBENC",name="TAPE01",volume=""} 1
-	`
-	errorMetric := `
-    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
-    # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="drives"} 1
-	`
-	timeoutMetric := `
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="drives"} 1
-	`
-	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger(), true)
-	gatherers := setupGatherer(collector)
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
-	}
-	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", fmt.Errorf("Error")
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected+errorMetric),
-		"tsm_drive_online", "tsm_drive_state_info", "tsm_drive_volume_info", "tsm_exporter_collect_error"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", context.DeadlineExceeded
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected+timeoutMetric),
-		"tsm_drive_online", "tsm_drive_state_info", "tsm_drive_volume_info", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

@@ -34,8 +34,6 @@ var (
 	replicationviewTimeout          = kingpin.Flag("collector.replicationview.timeout", "Timeout for collecting replicationview information").Default("5").Int()
 	useReplicationViewMetricCache   = kingpin.Flag("collector.replicationview.metric-cache", "Cache replicationview metrics from last completed replication").Default("true").Bool()
 	DsmadmcReplicationViewsExec     = dsmadmcReplicationViews
-	replicationviewCache            = map[string]map[string]ReplicationViewMetric{}
-	replicationviewCacheMutex       = sync.RWMutex{}
 	replicationviewMetricCache      = map[string]ReplicationViewMetric{}
 	replicationviewMetricCacheMutex = sync.RWMutex{}
 	replMap                         = map[string]string{
@@ -72,14 +70,13 @@ type ReplicationViewsCollector struct {
 	ReplicatedFiles *prometheus.Desc
 	target          *config.Target
 	logger          log.Logger
-	useCache        bool
 }
 
 func init() {
 	registerCollector("replicationview", true, NewReplicationViewsExporter)
 }
 
-func NewReplicationViewsExporter(target *config.Target, logger log.Logger, useCache bool) Collector {
+func NewReplicationViewsExporter(target *config.Target, logger log.Logger) Collector {
 	return &ReplicationViewsCollector{
 		NotCompleted: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "not_completed"),
 			"Number of replications not completed for today", []string{"nodename", "fsname"}, nil),
@@ -93,9 +90,8 @@ func NewReplicationViewsExporter(target *config.Target, logger log.Logger, useCa
 			"Amount of data replicated in bytes", []string{"nodename", "fsname"}, nil),
 		ReplicatedFiles: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "replicated_files"),
 			"Number of files replicated", []string{"nodename", "fsname"}, nil),
-		target:   target,
-		logger:   logger,
-		useCache: useCache,
+		target: target,
+		logger: logger,
 	}
 }
 
@@ -136,22 +132,14 @@ func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *ReplicationViewsCollector) collect() (map[string]ReplicationViewMetric, error) {
-	var err error
-	var out string
 	metrics := make(map[string]ReplicationViewMetric)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*replicationviewTimeout)*time.Second)
 	defer cancel()
-	out, err = DsmadmcReplicationViewsExec(c.target, ctx, c.logger)
+	out, err := DsmadmcReplicationViewsExec(c.target, ctx, c.logger)
 	if err != nil {
-		if c.useCache {
-			metrics = replicationviewReadCache(c.target.Name)
-		}
 		return metrics, err
 	}
 	metrics = replicationviewParse(out, c.target, *useReplicationViewMetricCache, c.logger)
-	if c.useCache {
-		replicationviewWriteCache(c.target.Name, metrics)
-	}
 	return metrics, nil
 }
 
@@ -265,20 +253,4 @@ func getReplFields() []string {
 	}
 	sort.Strings(fields)
 	return fields
-}
-
-func replicationviewReadCache(target string) map[string]ReplicationViewMetric {
-	metrics := make(map[string]ReplicationViewMetric)
-	replicationviewCacheMutex.RLock()
-	if cache, ok := replicationviewCache[target]; ok {
-		metrics = cache
-	}
-	replicationviewCacheMutex.RUnlock()
-	return metrics
-}
-
-func replicationviewWriteCache(target string, metrics map[string]ReplicationViewMetric) {
-	replicationviewCacheMutex.Lock()
-	replicationviewCache[target] = metrics
-	replicationviewCacheMutex.Unlock()
 }

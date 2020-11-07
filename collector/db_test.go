@@ -96,7 +96,7 @@ func TestDBCollector(t *testing.T) {
 	`
 	w := log.NewSyncWriter(os.Stderr)
 	logger := log.NewLogfmtLogger(w)
-	collector := NewDBExporter(&config.Target{}, logger, false)
+	collector := NewDBExporter(&config.Target{}, logger)
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -128,7 +128,7 @@ func TestDBCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="db"} 0
 	`
-	collector := NewDBExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewDBExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -156,7 +156,7 @@ func TestDBCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="db"} 1
 	`
-	collector := NewDBExporter(&config.Target{}, log.NewNopLogger(), false)
+	collector := NewDBExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -165,102 +165,6 @@ func TestDBCollectorTimeout(t *testing.T) {
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_db_space_total_bytes", "tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-}
-
-func TestDBCollectorCache(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
-		t.Fatal(err)
-	}
-	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockedDBStdout, nil
-	}
-	expected := `
-	# HELP tsm_db_buffer_hit_ratio DB buffer hit ratio
-	# TYPE tsm_db_buffer_hit_ratio gauge
-	tsm_db_buffer_hit_ratio{dbname="TSMDB1"} 88.6
-	# HELP tsm_db_buffer_total_requests DB total buffer requests
-	# TYPE tsm_db_buffer_total_requests counter
-	tsm_db_buffer_total_requests{dbname="TSMDB1"} 11607707032
-	# HELP tsm_db_last_backup_time Time since last backup in epoch
-	# TYPE tsm_db_last_backup_time gauge
-	tsm_db_last_backup_time{dbname="TSMDB1"} 1.590135e+09
-	# HELP tsm_db_pages_free DB free pages
-	# TYPE tsm_db_pages_free gauge
-	tsm_db_pages_free{dbname="TSMDB1"} 3092796
-	# HELP tsm_db_pages_total DB total pages
-	# TYPE tsm_db_pages_total gauge
-	tsm_db_pages_total{dbname="TSMDB1"} 28836868
-	# HELP tsm_db_pages_usable DB usable pages
-	# TYPE tsm_db_pages_usable gauge
-	tsm_db_pages_usable{dbname="TSMDB1"} 28836092
-	# HELP tsm_db_pages_used DB used pages
-	# TYPE tsm_db_pages_used gauge
-	tsm_db_pages_used{dbname="TSMDB1"} 25743296
-	# HELP tsm_db_pkg_hit_ratio DB pkg hit ratio
-	# TYPE tsm_db_pkg_hit_ratio gauge
-	tsm_db_pkg_hit_ratio{dbname="TSMDB1"} 98.3
-	# HELP tsm_db_sort_overflow DB sort overflow
-	# TYPE tsm_db_sort_overflow gauge
-	tsm_db_sort_overflow{dbname="TSMDB1"} 0
-    # HELP tsm_db_space_free_bytes DB free space in bytes
-    # TYPE tsm_db_space_free_bytes gauge
-    tsm_db_space_free_bytes{dbname="TSMDB1"} 1524276133888
-    # HELP tsm_db_space_total_bytes DB total space in bytes
-    # TYPE tsm_db_space_total_bytes gauge
-    tsm_db_space_total_bytes{dbname="TSMDB1"} 2198519939072
-    # HELP tsm_db_space_used_bytes DB used space in bytes
-    # TYPE tsm_db_space_used_bytes gauge
-    tsm_db_space_used_bytes{dbname="TSMDB1"} 674209202176
-	`
-	errorMetric := `
-    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
-    # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="db"} 1
-	`
-	timeoutMetric := `
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="db"} 1
-	`
-	collector := NewDBExporter(&config.Target{}, log.NewNopLogger(), true)
-	gatherers := setupGatherer(collector)
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
-	}
-	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", fmt.Errorf("Error")
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(errorMetric+expected),
-		"tsm_db_space_total_bytes", "tsm_db_space_used_bytes", "tsm_db_space_free_bytes",
-		"tsm_db_pages_total", "tsm_db_pages_usable", "tsm_db_pages_used", "tsm_db_pages_free",
-		"tsm_db_buffer_hit_ratio", "tsm_db_buffer_total_requests", "tsm_db_sort_overflow", "tsm_db_pkg_hit_ratio",
-		"tsm_db_last_backup_time",
-		"tsm_exporter_collect_error"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", context.DeadlineExceeded
-	}
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(timeoutMetric+expected),
-		"tsm_db_space_total_bytes", "tsm_db_space_used_bytes", "tsm_db_space_free_bytes",
-		"tsm_db_pages_total", "tsm_db_pages_usable", "tsm_db_pages_used", "tsm_db_pages_free",
-		"tsm_db_buffer_hit_ratio", "tsm_db_buffer_total_requests", "tsm_db_sort_overflow", "tsm_db_pkg_hit_ratio",
-		"tsm_db_last_backup_time",
-		"tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
