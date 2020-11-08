@@ -7,6 +7,7 @@
 * For storage_pool metrics, replace name label with storagepool
 * For volume metrics, replace name label with volume
 * Improve events collector to not require saving any data in memory, remove --collector.events.duration-cache flag
+* Improve replicationview collector to not store any data in memory, remove --collector.replicationview.metric-cache flag
 
 ## 0.6.0 / 2020-11-06
 

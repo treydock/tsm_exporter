@@ -131,3 +131,11 @@ func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logg
 	level.Debug(logger).Log("msg", "query output", "out", stdout.String())
 	return stdout.String(), nil
 }
+
+func buildInFilter(items []string) string {
+	var values []string
+	for _, s := range items {
+		values = append(values, fmt.Sprintf("'%s'", s))
+	}
+	return strings.Join(values, ",")
+}

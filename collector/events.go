@@ -118,7 +118,7 @@ func (c *EventsCollector) collect() (map[string]EventMetric, error) {
 func buildEventsCompletedQuery(target *config.Target) string {
 	query := "SELECT schedule_name, actual_start, completed FROM events WHERE"
 	if target.Schedules != nil {
-		query = query + fmt.Sprintf(" schedule_name IN (%s) AND", buildScheduleFilter(target.Schedules))
+		query = query + fmt.Sprintf(" schedule_name IN (%s) AND", buildInFilter(target.Schedules))
 	}
 	query = query + " status = 'Completed' ORDER BY completed DESC"
 	return query
@@ -135,7 +135,7 @@ func buildEventsNotCompletedQuery(target *config.Target) string {
 	today := now.Format("2006-01-02")
 	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
 	if target.Schedules != nil {
-		query = query + fmt.Sprintf(" schedule_name IN (%s) AND", buildScheduleFilter(target.Schedules))
+		query = query + fmt.Sprintf(" schedule_name IN (%s) AND", buildInFilter(target.Schedules))
 	}
 	query = query + fmt.Sprintf(" DATE(scheduled_start) BETWEEN '%s' AND '%s'", yesterday, today)
 	return query
@@ -144,14 +144,6 @@ func buildEventsNotCompletedQuery(target *config.Target) string {
 func dsmadmcEventsNotCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 	out, err := dsmadmcQuery(target, buildEventsNotCompletedQuery(target), ctx, logger)
 	return out, err
-}
-
-func buildScheduleFilter(schedules []string) string {
-	var values []string
-	for _, s := range schedules {
-		values = append(values, fmt.Sprintf("'%s'", s))
-	}
-	return strings.Join(values, ",")
 }
 
 func eventsParse(completedOut string, notCompletedOut string, logger log.Logger) map[string]EventMetric {
