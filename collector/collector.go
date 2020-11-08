@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -36,6 +37,7 @@ const (
 var (
 	dsmLogDir       = kingpin.Flag("path.dsm_log.dir", "Directory to use for DSM_LOG environment variable").Default("/tmp").String()
 	execCommand     = exec.CommandContext
+	timeNow         = time.Now
 	collectorState  = make(map[string]bool)
 	factories       = make(map[string]func(target *config.Target, logger log.Logger) Collector)
 	collectDuration = prometheus.NewDesc(

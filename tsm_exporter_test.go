@@ -57,11 +57,13 @@ LIB1,TAPE11,YES,LOADED,FOO2
 LIBENC,TAPE00,YES,EMPTY,
 LIBENC,TAPE01,NO,EMPTY,
 `
-	mockEventStdout = `
+	mockEventCompletedStdout = `
 FOO,Completed,2020-03-22 05:09:43.000000,2020-03-22 05:41:14.000000
-FOO,Future,,
-BAR,Not Started,,
-BAR,Not Started,,
+`
+	mockEventNotCompletedStdout = `
+FOO,Future
+BAR,Not Started
+BAR,Not Started
 `
 	mockReplicationViewStdout = `
 COMPLETE,2020-03-23 06:06:45.000000,/TEST2CONF,TEST2DB2,2020-03-23 00:45:29.000000,167543418,2
@@ -113,8 +115,11 @@ func TestMetricsHandler(t *testing.T) {
 	collector.DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockDriveStdout, nil
 	}
-	collector.DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockEventStdout, nil
+	collector.DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockEventCompletedStdout, nil
+	}
+	collector.DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockEventNotCompletedStdout, nil
 	}
 	collector.DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockReplicationViewStdout, nil
@@ -147,8 +152,11 @@ func TestMetricsHandlerCollectorsDefined(t *testing.T) {
 	collector.DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockDriveStdout, nil
 	}
-	collector.DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockEventStdout, nil
+	collector.DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockEventCompletedStdout, nil
+	}
+	collector.DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockEventNotCompletedStdout, nil
 	}
 	collector.DsmadmcReplicationViewsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockReplicationViewStdout, nil
