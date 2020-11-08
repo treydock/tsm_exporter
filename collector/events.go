@@ -28,11 +28,9 @@ import (
 )
 
 var (
-	eventsTimeout            = kingpin.Flag("collector.events.timeout", "Timeout for collecting events information").Default("5").Int()
-	useEventDurationCache    = kingpin.Flag("collector.events.duration-cache", "Cache event durations").Default("true").Bool()
-	DsmadmcEventsExec        = dsmadmcEvents
-	eventsDurationCache      = map[string]float64{}
-	eventsDurationCacheMutex = sync.RWMutex{}
+	eventsTimeout                 = kingpin.Flag("collector.events.timeout", "Timeout for collecting events information").Default("10").Int()
+	DsmadmcEventsCompletedExec    = dsmadmcEventsCompleted
+	DsmadmcEventsNotCompletedExec = dsmadmcEventsNotCompleted
 )
 
 type EventMetric struct {
@@ -57,7 +55,7 @@ func NewEventsExporter(target *config.Target, logger log.Logger) Collector {
 		notCompleted: prometheus.NewDesc(prometheus.BuildFQName(namespace, "schedule", "not_completed"),
 			"Number of scheduled events not completed for today", []string{"schedule"}, nil),
 		duration: prometheus.NewDesc(prometheus.BuildFQName(namespace, "schedule", "duration_seconds"),
-			"Amount of time taken to complete scheduled event for today, in seconds", []string{"schedule"}, nil),
+			"Amount of time taken to complete the most recent completed scheduled event", []string{"schedule"}, nil),
 		target: target,
 		logger: logger,
 	}
@@ -81,9 +79,9 @@ func (c *EventsCollector) Collect(ch chan<- prometheus.Metric) {
 		errorMetric = 1
 	}
 
-	for _, m := range metrics {
-		ch <- prometheus.MustNewConstMetric(c.notCompleted, prometheus.GaugeValue, m.notCompleted, m.name)
-		ch <- prometheus.MustNewConstMetric(c.duration, prometheus.GaugeValue, m.duration, m.name)
+	for sched, m := range metrics {
+		ch <- prometheus.MustNewConstMetric(c.notCompleted, prometheus.GaugeValue, m.notCompleted, sched)
+		ch <- prometheus.MustNewConstMetric(c.duration, prometheus.GaugeValue, m.duration, sched)
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "events")
@@ -92,44 +90,108 @@ func (c *EventsCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *EventsCollector) collect() (map[string]EventMetric, error) {
-	metrics := make(map[string]EventMetric)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*eventsTimeout)*time.Second)
 	defer cancel()
-	out, err := DsmadmcEventsExec(c.target, ctx, c.logger)
-	if err != nil {
-		return metrics, err
+	var completedOut, notCompletedOut string
+	var completedErr, notCompletedErr error
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		completedOut, completedErr = DsmadmcEventsCompletedExec(c.target, ctx, c.logger)
+	}()
+	go func() {
+		defer wg.Done()
+		notCompletedOut, notCompletedErr = DsmadmcEventsNotCompletedExec(c.target, ctx, c.logger)
+	}()
+	wg.Wait()
+	if completedErr != nil {
+		return nil, completedErr
 	}
-	metrics = eventsParse(out, c.target, *useEventDurationCache, c.logger)
+	if notCompletedErr != nil {
+		return nil, notCompletedErr
+	}
+	metrics := eventsParse(completedOut, notCompletedOut, c.logger)
 	return metrics, nil
 }
 
-func dsmadmcEvents(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	query := "SELECT schedule_name,status,actual_start,completed FROM events "
-	now := time.Now().Local()
-	today := now.Format("2006-01-02")
-	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
-	query = query + fmt.Sprintf(" WHERE DATE(scheduled_start) BETWEEN '%s' AND '%s'", yesterday, today)
-	out, err := dsmadmcQuery(target, query, ctx, logger)
+func buildEventsCompletedQuery(target *config.Target) string {
+	query := "SELECT schedule_name, actual_start, completed FROM events WHERE"
+	if target.Schedules != nil {
+		query = query + fmt.Sprintf(" schedule_name IN (%s) AND", buildScheduleFilter(target.Schedules))
+	}
+	query = query + " status = 'Completed' ORDER BY completed DESC"
+	return query
+}
+
+func dsmadmcEventsCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildEventsCompletedQuery(target), ctx, logger)
 	return out, err
 }
 
-func eventsParse(out string, target *config.Target, useCache bool, logger log.Logger) map[string]EventMetric {
+func buildEventsNotCompletedQuery(target *config.Target) string {
+	query := "SELECT schedule_name,status FROM events WHERE"
+	now := timeNow().Local()
+	today := now.Format("2006-01-02")
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+	if target.Schedules != nil {
+		query = query + fmt.Sprintf(" schedule_name IN (%s) AND", buildScheduleFilter(target.Schedules))
+	}
+	query = query + fmt.Sprintf(" DATE(scheduled_start) BETWEEN '%s' AND '%s'", yesterday, today)
+	return query
+}
+
+func dsmadmcEventsNotCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildEventsNotCompletedQuery(target), ctx, logger)
+	return out, err
+}
+
+func buildScheduleFilter(schedules []string) string {
+	var values []string
+	for _, s := range schedules {
+		values = append(values, fmt.Sprintf("'%s'", s))
+	}
+	return strings.Join(values, ",")
+}
+
+func eventsParse(completedOut string, notCompletedOut string, logger log.Logger) map[string]EventMetric {
 	metrics := make(map[string]EventMetric)
 	statusCond := []string{"Completed", "Future", "Started", "In Progress", "Pending"}
-	lines := strings.Split(out, "\n")
+	lines := strings.Split(completedOut, "\n")
 	for _, line := range lines {
-		l := strings.TrimSpace(line)
-		items := strings.Split(l, ",")
-		if len(items) != 4 {
+		items := strings.Split(strings.TrimSpace(line), ",")
+		if len(items) != 3 {
+			continue
+		}
+		sched := items[0]
+		if _, ok := metrics[sched]; ok {
+			continue
+		}
+		actual_start, err := time.Parse(timeFormat, items[1])
+		if err != nil {
+			level.Error(logger).Log("msg", "Failed to parse actual start time", "time", items[1], "err", err)
+			continue
+		}
+		completed, err := time.Parse(timeFormat, items[2])
+		if err != nil {
+			level.Error(logger).Log("msg", "Failed to parse completed time", "time", items[2], "err", err)
+			continue
+		}
+		duration := completed.Sub(actual_start).Seconds()
+		var metric EventMetric
+		metric.name = sched
+		metric.duration = duration
+		metrics[sched] = metric
+	}
+	lines = strings.Split(notCompletedOut, "\n")
+	for _, line := range lines {
+		items := strings.Split(strings.TrimSpace(line), ",")
+		if len(items) != 2 {
 			continue
 		}
 		sched := items[0]
 		status := items[1]
-		if target.Schedules != nil && !sliceContains(target.Schedules, sched) {
-			continue
-		}
 		var metric EventMetric
-		durationCacheKey := fmt.Sprintf("%s-%s", target.Name, sched)
 		if m, ok := metrics[sched]; ok {
 			metric = m
 		} else {
@@ -137,33 +199,6 @@ func eventsParse(out string, target *config.Target, useCache bool, logger log.Lo
 		}
 		if !sliceContains(statusCond, status) {
 			metric.notCompleted++
-		}
-		if status == "Completed" {
-			actual_start, err := time.Parse(timeFormat, items[2])
-			if err != nil {
-				level.Error(logger).Log("msg", fmt.Sprintf("Failed to parse actual_start time '%v': %s", items[2], err.Error()))
-				continue
-			}
-			completed, err := time.Parse(timeFormat, items[3])
-			if err != nil {
-				level.Error(logger).Log("msg", fmt.Sprintf("Failed to parse completed time '%v': %s", items[3], err.Error()))
-				continue
-			}
-			duration := completed.Sub(actual_start).Seconds()
-			metric.duration = duration
-			if useCache {
-				eventsDurationCacheMutex.Lock()
-				eventsDurationCache[durationCacheKey] = metric.duration
-				eventsDurationCacheMutex.Unlock()
-			}
-		} else if metric.duration != 0 {
-			// do nothing, use previous value
-		} else if useCache {
-			eventsDurationCacheMutex.RLock()
-			if d, ok := eventsDurationCache[durationCacheKey]; ok {
-				metric.duration = d
-			}
-			eventsDurationCacheMutex.RUnlock()
 		}
 		metrics[sched] = metric
 	}

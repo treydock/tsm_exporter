@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -28,16 +29,50 @@ import (
 )
 
 var (
-	mockEventStdout = `
-FOO,Completed,2020-03-22 05:09:43.000000,2020-03-22 05:41:14.000000
-FOO,Future,,
-BAR,Not Started,,
-BAR,Not Started,,
+	mockEventCompletedStdout = `
+FOO,2020-03-22 05:09:43.000000,2020-03-22 05:41:14.000000
+FOO,2020-03-21 05:09:43.000000,2020-03-21 05:39:14.000000
+FOO,2020-03-20 05:09:43.000000,2020-03-20 05:40:14.000000
+`
+	mockEventNotCompletedStdout = `
+FOO,Future
+BAR,Not Started
+BAR,Not Started
 `
 )
 
+func TestBuildEventsCompletedQuery(t *testing.T) {
+	expectedQuery := "SELECT schedule_name, actual_start, completed FROM events WHERE status = 'Completed' ORDER BY completed DESC"
+	query := buildEventsCompletedQuery(&config.Target{Name: "test"})
+	if query != expectedQuery {
+		t.Errorf("\nExpected: %s\nGot: %s", expectedQuery, query)
+	}
+	expectedQuery = "SELECT schedule_name, actual_start, completed FROM events WHERE schedule_name IN ('FOO','BAR') AND status = 'Completed' ORDER BY completed DESC"
+	query = buildEventsCompletedQuery(&config.Target{Name: "test", Schedules: []string{"FOO", "BAR"}})
+	if query != expectedQuery {
+		t.Errorf("\nExpected: %s\nGot: %s", expectedQuery, query)
+	}
+}
+
+func TestBuildEventsNotCompletedQuery(t *testing.T) {
+	mockNow, _ := time.Parse("01/02/2006 15:04:05", "07/02/2020 13:00:00")
+	timeNow = func() time.Time {
+		return mockNow
+	}
+	expectedQuery := "SELECT schedule_name,status FROM events WHERE DATE(scheduled_start) BETWEEN '2020-07-01' AND '2020-07-02'"
+	query := buildEventsNotCompletedQuery(&config.Target{Name: "test"})
+	if query != expectedQuery {
+		t.Errorf("Expected: %s\nGot: %s", expectedQuery, query)
+	}
+	expectedQuery = "SELECT schedule_name,status FROM events WHERE schedule_name IN ('FOO','BAR') AND DATE(scheduled_start) BETWEEN '2020-07-01' AND '2020-07-02'"
+	query = buildEventsNotCompletedQuery(&config.Target{Name: "test", Schedules: []string{"FOO", "BAR"}})
+	if query != expectedQuery {
+		t.Errorf("Expected: %s\nGot: %s", expectedQuery, query)
+	}
+}
+
 func TestEventsParse(t *testing.T) {
-	metrics := eventsParse(mockEventStdout, &config.Target{Name: "test"}, false, log.NewNopLogger())
+	metrics := eventsParse(mockEventCompletedStdout, mockEventNotCompletedStdout, log.NewNopLogger())
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %d", len(metrics))
 		return
@@ -50,48 +85,6 @@ func TestEventsParse(t *testing.T) {
 	}
 	if val := metrics["BAR"].notCompleted; val != 2 {
 		t.Errorf("Expected 1 notCompleted, got %v", val)
-	}
-}
-
-func TestEventsParseWithSchedules(t *testing.T) {
-	metrics := eventsParse(mockEventStdout, &config.Target{Name: "test", Schedules: []string{"BAR"}}, false, log.NewNopLogger())
-	if len(metrics) != 1 {
-		t.Errorf("Expected 1 metrics, got %d", len(metrics))
-	}
-	if val := metrics["BAR"].notCompleted; val != 2 {
-		t.Errorf("Expected 2 notCompleted, got %v", val)
-	}
-}
-
-func TestEventsParseDurationCache(t *testing.T) {
-	metrics := eventsParse(mockEventStdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
-	if len(metrics) != 2 {
-		t.Errorf("Expected 2 metrics, got %d", len(metrics))
-		return
-	}
-	if val := metrics["FOO"].notCompleted; val != 0 {
-		t.Errorf("Expected 0 notCompleted, got %v", val)
-	}
-	if val := metrics["FOO"].duration; val != 1891 {
-		t.Errorf("Expected 1891 duration, got %v", val)
-	}
-	stdout := `
-FOO,Not Started,,
-BAR,Completed,2020-03-22 05:09:44.000000,2020-03-22 05:41:14.000000
-`
-	metrics = eventsParse(stdout, &config.Target{Name: "test"}, true, log.NewNopLogger())
-	if len(metrics) != 2 {
-		t.Errorf("Expected 2 metrics, got %d", len(metrics))
-		return
-	}
-	if val := metrics["FOO"].notCompleted; val != 1 {
-		t.Errorf("Expected 1 notCompleted, got %v", val)
-	}
-	if val := metrics["FOO"].duration; val != 1891 {
-		t.Errorf("Expected 1891 duration, got %v", val)
-	}
-	if val := metrics["BAR"].duration; val != 1890 {
-		t.Errorf("Expected 1890 duration, got %v", val)
 	}
 }
 
@@ -99,10 +92,11 @@ func TestEventsCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	cache := false
-	useEventDurationCache = &cache
-	DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockEventStdout, nil
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockEventCompletedStdout, nil
+	}
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockEventNotCompletedStdout, nil
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
@@ -111,7 +105,7 @@ func TestEventsCollector(t *testing.T) {
     # HELP tsm_exporter_collect_timeout Indicates the collector timed out
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="events"} 0
-	# HELP tsm_schedule_duration_seconds Amount of time taken to complete scheduled event for today, in seconds
+	# HELP tsm_schedule_duration_seconds Amount of time taken to complete the most recent completed scheduled event
 	# TYPE tsm_schedule_duration_seconds gauge
 	tsm_schedule_duration_seconds{schedule="BAR"} 0
 	tsm_schedule_duration_seconds{schedule="FOO"} 1891
@@ -120,7 +114,9 @@ func TestEventsCollector(t *testing.T) {
     tsm_schedule_not_completed{schedule="BAR"} 2
     tsm_schedule_not_completed{schedule="FOO"} 0
 	`
-	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger())
+	w := log.NewSyncWriter(os.Stderr)
+	logger := log.NewLogfmtLogger(w)
+	collector := NewEventsExporter(&config.Target{}, logger)
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -138,7 +134,10 @@ func TestEventsCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", fmt.Errorf("Error")
+	}
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -167,7 +166,10 @@ func TestEventsCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcEventsExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", context.DeadlineExceeded
+	}
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -192,14 +194,30 @@ func TestEventsCollectorTimeout(t *testing.T) {
 	}
 }
 
-func TestDsmadmcEvents(t *testing.T) {
+func TestDsmadmcEventsCompleted(t *testing.T) {
 	execCommand = fakeExecCommand
 	mockedExitStatus = 0
 	mockedStdout = "foo"
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcEvents(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcEventsCompleted(&config.Target{}, ctx, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err.Error())
+	}
+	if out != mockedStdout {
+		t.Errorf("Unexpected out: %s", out)
+	}
+}
+
+func TestDsmadmcEventsNotCompleted(t *testing.T) {
+	execCommand = fakeExecCommand
+	mockedExitStatus = 0
+	mockedStdout = "foo"
+	defer func() { execCommand = exec.CommandContext }()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := dsmadmcEventsNotCompleted(&config.Target{}, ctx, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
