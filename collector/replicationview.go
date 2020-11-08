@@ -16,8 +16,6 @@ package collector
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,30 +29,16 @@ import (
 )
 
 var (
-	replicationviewTimeout          = kingpin.Flag("collector.replicationview.timeout", "Timeout for collecting replicationview information").Default("5").Int()
-	useReplicationViewMetricCache   = kingpin.Flag("collector.replicationview.metric-cache", "Cache replicationview metrics from last completed replication").Default("true").Bool()
-	DsmadmcReplicationViewsExec     = dsmadmcReplicationViews
-	replicationviewMetricCache      = map[string]ReplicationViewMetric{}
-	replicationviewMetricCacheMutex = sync.RWMutex{}
-	replMap                         = map[string]string{
-		"START_TIME":          "StartTime",
-		"END_TIME":            "EndTime",
-		"NODE_NAME":           "NodeName",
-		"FSNAME":              "FsName",
-		"COMP_STATE":          "CompState",
-		"TOTFILES_REPLICATED": "ReplicatedFiles",
-		"TOTBYTES_REPLICATED": "ReplicatedBytes",
-	}
+	replicationviewTimeout                  = kingpin.Flag("collector.replicationview.timeout", "Timeout for collecting replicationview information").Default("5").Int()
+	DsmadmcReplicationViewsCompletedExec    = dsmadmcReplicationViewsCompleted
+	DsmadmcReplicationViewsNotCompletedExec = dsmadmcReplicationViewsNotCompleted
 )
 
 type ReplicationViewMetric struct {
 	NodeName        string
 	FsName          string
-	StartTime       string
-	EndTime         string
-	CompState       string
-	StartTimestamp  float64
-	EndTimestamp    float64
+	StartTime       float64
+	EndTime         float64
 	NotCompleted    float64
 	Duration        float64
 	ReplicatedBytes float64
@@ -119,8 +103,8 @@ func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for _, m := range metrics {
 		ch <- prometheus.MustNewConstMetric(c.NotCompleted, prometheus.GaugeValue, m.NotCompleted, m.NodeName, m.FsName)
-		ch <- prometheus.MustNewConstMetric(c.StartTime, prometheus.GaugeValue, m.StartTimestamp, m.NodeName, m.FsName)
-		ch <- prometheus.MustNewConstMetric(c.EndTime, prometheus.GaugeValue, m.EndTimestamp, m.NodeName, m.FsName)
+		ch <- prometheus.MustNewConstMetric(c.StartTime, prometheus.GaugeValue, m.StartTime, m.NodeName, m.FsName)
+		ch <- prometheus.MustNewConstMetric(c.EndTime, prometheus.GaugeValue, m.EndTime, m.NodeName, m.FsName)
 		ch <- prometheus.MustNewConstMetric(c.Duration, prometheus.GaugeValue, m.Duration, m.NodeName, m.FsName)
 		ch <- prometheus.MustNewConstMetric(c.ReplicatedBytes, prometheus.GaugeValue, m.ReplicatedBytes, m.NodeName, m.FsName)
 		ch <- prometheus.MustNewConstMetric(c.ReplicatedFiles, prometheus.GaugeValue, m.ReplicatedFiles, m.NodeName, m.FsName)
@@ -132,125 +116,124 @@ func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *ReplicationViewsCollector) collect() (map[string]ReplicationViewMetric, error) {
-	metrics := make(map[string]ReplicationViewMetric)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*replicationviewTimeout)*time.Second)
 	defer cancel()
-	out, err := DsmadmcReplicationViewsExec(c.target, ctx, c.logger)
-	if err != nil {
-		return metrics, err
+	var completedOut, notCompletedOut string
+	var completedErr, notCompletedErr error
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		completedOut, completedErr = DsmadmcReplicationViewsCompletedExec(c.target, ctx, c.logger)
+	}()
+	go func() {
+		defer wg.Done()
+		notCompletedOut, notCompletedErr = DsmadmcReplicationViewsNotCompletedExec(c.target, ctx, c.logger)
+	}()
+	wg.Wait()
+	if completedErr != nil {
+		return nil, completedErr
 	}
-	metrics = replicationviewParse(out, c.target, *useReplicationViewMetricCache, c.logger)
+	if notCompletedErr != nil {
+		return nil, notCompletedErr
+	}
+	metrics := replicationviewParse(completedOut, notCompletedOut, c.logger)
 	return metrics, nil
 }
 
-func dsmadmcReplicationViews(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	fields := getReplFields()
-	query := fmt.Sprintf("SELECT %s FROM replicationview", strings.Join(fields, ","))
-	now := time.Now().Local()
-	today := now.Format("2006-01-02")
-	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
-	query = query + fmt.Sprintf(" WHERE DATE(START_TIME) BETWEEN '%s' AND '%s'", yesterday, today)
-	query = query + " order by START_TIME desc"
-	out, err := dsmadmcQuery(target, query, ctx, logger)
+func buildReplicationViewCompletedQuery(target *config.Target) string {
+	query := "SELECT NODE_NAME, FSNAME, START_TIME, END_TIME, TOTFILES_REPLICATED, TOTBYTES_REPLICATED FROM replicationview WHERE"
+	if target.ReplicationNodeNames != nil {
+		query = query + fmt.Sprintf(" NODE_NAME IN (%s) AND", buildInFilter(target.ReplicationNodeNames))
+	}
+	query = query + " COMP_STATE = 'COMPLETE' ORDER BY END_TIME DESC"
+	return query
+}
+
+func dsmadmcReplicationViewsCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildReplicationViewCompletedQuery(target), ctx, logger)
 	return out, err
 }
 
-func replicationviewParse(out string, target *config.Target, useCache bool, logger log.Logger) map[string]ReplicationViewMetric {
+func buildReplicationViewNotCompletedQuery(target *config.Target) string {
+	query := "SELECT NODE_NAME, FSNAME FROM replicationview WHERE"
+	if target.ReplicationNodeNames != nil {
+		query = query + fmt.Sprintf(" NODE_NAME IN (%s) AND", buildInFilter(target.ReplicationNodeNames))
+	}
+	now := timeNow().Local()
+	today := now.Format("2006-01-02")
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+	query = query + fmt.Sprintf(" COMP_STATE <> 'COMPLETE' AND DATE(START_TIME) BETWEEN '%s' AND '%s'", yesterday, today)
+	return query
+}
+
+func dsmadmcReplicationViewsNotCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildReplicationViewNotCompletedQuery(target), ctx, logger)
+	return out, err
+}
+
+func replicationviewParse(completedOut string, notCompletedOut string, logger log.Logger) map[string]ReplicationViewMetric {
 	metrics := make(map[string]ReplicationViewMetric)
-	notCompleted := make(map[string]float64)
-	fields := getReplFields()
-	lines := strings.Split(out, "\n")
+	lines := strings.Split(completedOut, "\n")
 	for _, line := range lines {
 		values := strings.Split(strings.TrimSpace(line), ",")
-		if len(values) != len(fields) {
+		if len(values) != 6 {
 			continue
 		}
 		var metric ReplicationViewMetric
-		ps := reflect.ValueOf(&metric) // pointer to struct - addressable
-		s := ps.Elem()                 //struct
-		for i, k := range fields {
-			field := replMap[k]
-			f := s.FieldByName(field)
-			if f.Kind() == reflect.String {
-				f.SetString(values[i])
-			} else if f.Kind() == reflect.Float64 {
-				val, err := strconv.ParseFloat(values[i], 64)
-				if err != nil {
-					level.Error(logger).Log("msg", fmt.Sprintf("Error parsing %s value %s: %s", k, values[i], err.Error()))
-					continue
-				} else {
-					f.SetFloat(val)
-				}
-			}
-		}
-		if target.ReplicationNodeNames != nil && !sliceContains(target.ReplicationNodeNames, metric.NodeName) {
-			continue
-		}
-		key := fmt.Sprintf("%s-%s", metric.NodeName, metric.FsName)
-		if metric.CompState != "COMPLETE" {
-			notCompleted[key]++
-		}
+		nodeName := values[0]
+		fsName := values[1]
+		key := fmt.Sprintf("%s-%s", nodeName, fsName)
 		if _, ok := metrics[key]; ok {
 			continue
-		} else {
-			metrics[key] = metric
 		}
+		startTime, err := time.Parse(timeFormat, values[2])
+		if err != nil {
+			level.Error(logger).Log("msg", "Failed to parse START_TIME", "value", values[2], "err", err)
+			continue
+		}
+		endTime, err := time.Parse(timeFormat, values[3])
+		if err != nil {
+			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", values[3], "err", err)
+			continue
+		}
+		replicatedFiles, err := strconv.ParseFloat(values[4], 64)
+		if err != nil {
+			level.Error(logger).Log("msg", "Error parsing replicated files", "value", values[4], "err", err)
+			continue
+		}
+		replicatedBytes, err := strconv.ParseFloat(values[5], 64)
+		if err != nil {
+			level.Error(logger).Log("msg", "Error parsing replicated bytes", "value", values[5], "err", err)
+			continue
+		}
+		metric.NodeName = nodeName
+		metric.FsName = fsName
+		metric.StartTime = float64(startTime.Unix())
+		metric.EndTime = float64(endTime.Unix())
+		metric.Duration = endTime.Sub(startTime).Seconds()
+		metric.ReplicatedFiles = replicatedFiles
+		metric.ReplicatedBytes = replicatedBytes
+		metrics[key] = metric
 	}
-	for key, metric := range metrics {
-		cacheKey := fmt.Sprintf("%s-%s", target.Name, key)
-		if val, ok := notCompleted[key]; ok {
-			metric.NotCompleted = val
+	lines = strings.Split(notCompletedOut, "\n")
+	for _, line := range lines {
+		values := strings.Split(strings.TrimSpace(line), ",")
+		if len(values) != 2 {
+			continue
 		}
-		if metric.CompState != "COMPLETE" {
-			if useCache {
-				replicationviewMetricCacheMutex.RLock()
-				if d, ok := replicationviewMetricCache[cacheKey]; ok {
-					metric.Duration = d.Duration
-					metric.StartTimestamp = d.StartTimestamp
-					metric.EndTimestamp = d.EndTimestamp
-					metric.ReplicatedBytes = d.ReplicatedBytes
-					metric.ReplicatedFiles = d.ReplicatedFiles
-				}
-				replicationviewMetricCacheMutex.RUnlock()
-			}
+		var metric ReplicationViewMetric
+		nodeName := values[0]
+		fsName := values[1]
+		key := fmt.Sprintf("%s-%s", nodeName, fsName)
+		if m, ok := metrics[key]; ok {
+			metric = m
 		} else {
-			start_time, err := time.Parse(timeFormat, metric.StartTime)
-			if err != nil {
-				level.Error(logger).Log("msg", fmt.Sprintf("Failed to parse START_TIME '%v': %s", metric.StartTime, err.Error()))
-				continue
-			} else {
-				metric.StartTimestamp = float64(start_time.Unix())
-			}
-			end_time, err := time.Parse(timeFormat, metric.EndTime)
-			if err != nil {
-				level.Error(logger).Log("msg", fmt.Sprintf("Failed to parse END_TIME '%v': %s", metric.EndTime, err.Error()))
-				continue
-			} else {
-				metric.EndTimestamp = float64(end_time.Unix())
-			}
-			if metric.EndTimestamp < 0 {
-				metric.EndTimestamp = 0
-				metric.Duration = 0
-			} else {
-				duration := end_time.Sub(start_time).Seconds()
-				metric.Duration = duration
-			}
-			if useCache {
-				replicationviewMetricCacheMutex.Lock()
-				replicationviewMetricCache[cacheKey] = metric
-				replicationviewMetricCacheMutex.Unlock()
-			}
+			metric.NodeName = nodeName
+			metric.FsName = fsName
 		}
+		metric.NotCompleted++
 		metrics[key] = metric
 	}
 	return metrics
-}
-
-func getReplFields() []string {
-	var fields []string
-	for k := range replMap {
-		fields = append(fields, k)
-	}
-	sort.Strings(fields)
-	return fields
 }
