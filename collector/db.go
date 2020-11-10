@@ -14,7 +14,6 @@
 package collector
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -135,12 +134,9 @@ func (c *DBCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *DBCollector) Collect(ch chan<- prometheus.Metric) {
 	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
-	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
-	if err == context.DeadlineExceeded {
-		timeout = 1
-	} else if err != nil {
+	if err != nil {
 		level.Error(c.logger).Log("msg", err)
 		errorMetric = 1
 	}
@@ -166,14 +162,11 @@ func (c *DBCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "db")
-	ch <- prometheus.MustNewConstMetric(collecTimeout, prometheus.GaugeValue, float64(timeout), "db")
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "db")
 }
 
 func (c *DBCollector) collect() ([]DBMetric, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*dbTimeout)*time.Second)
-	defer cancel()
-	out, err := DsmadmcDBExec(c.target, ctx, c.logger)
+	out, err := DsmadmcDBExec(c.target, c.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -181,10 +174,10 @@ func (c *DBCollector) collect() ([]DBMetric, error) {
 	return metrics, nil
 }
 
-func dsmadmcDB(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcDB(target *config.Target, logger log.Logger) (string, error) {
 	fields := getDBFields()
 	query := fmt.Sprintf("SELECT %s FROM db", strings.Join(fields, ","))
-	out, err := dsmadmcQuery(target, query, ctx, logger)
+	out, err := dsmadmcQuery(target, query, *dbTimeout, logger)
 	return out, err
 }
 

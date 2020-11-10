@@ -8,6 +8,11 @@
 * For volume metrics, replace name label with volume
 * Improve events collector to not require saving any data in memory, remove --collector.events.duration-cache flag
 * Improve replicationview collector to not store any data in memory, remove --collector.replicationview.metric-cache flag
+* Remove tsm_exporter_collect_timeout metric
+
+### Improvements
+
+* Run dsmadmc using goexpect rather than passing password at command line
 
 ## 0.6.0 / 2020-11-06
 

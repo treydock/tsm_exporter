@@ -14,7 +14,6 @@
 package collector
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -79,12 +78,9 @@ func (c *LogCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *LogCollector) Collect(ch chan<- prometheus.Metric) {
 	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
-	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
-	if err == context.DeadlineExceeded {
-		timeout = 1
-	} else if err != nil {
+	if err != nil {
 		level.Error(c.logger).Log("msg", err)
 		errorMetric = 1
 	}
@@ -96,14 +92,11 @@ func (c *LogCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "log")
-	ch <- prometheus.MustNewConstMetric(collecTimeout, prometheus.GaugeValue, float64(timeout), "log")
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "log")
 }
 
 func (c *LogCollector) collect() (LogMetric, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*logTimeout)*time.Second)
-	defer cancel()
-	out, err := DsmadmcLogExec(c.target, ctx, c.logger)
+	out, err := DsmadmcLogExec(c.target, c.logger)
 	if err != nil {
 		return LogMetric{}, err
 	}
@@ -111,10 +104,10 @@ func (c *LogCollector) collect() (LogMetric, error) {
 	return metrics, nil
 }
 
-func dsmadmcLog(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcLog(target *config.Target, logger log.Logger) (string, error) {
 	fields := getLogFields()
 	query := fmt.Sprintf("SELECT %s FROM log", strings.Join(fields, ","))
-	out, err := dsmadmcQuery(target, query, ctx, logger)
+	out, err := dsmadmcQuery(target, query, *logTimeout, logger)
 	return out, err
 }
 
