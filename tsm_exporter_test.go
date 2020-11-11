@@ -14,7 +14,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -97,34 +96,34 @@ func TestMain(m *testing.M) {
 }
 
 func TestMetricsHandler(t *testing.T) {
-	collector.DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcStatusExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockStatusStdout, nil
 	}
-	collector.DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcVolumesExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockVolumeStdout, nil
 	}
-	collector.DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcDBExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockedDBStdout, nil
 	}
-	collector.DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcLogExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockedLogStdout, nil
 	}
-	collector.DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcLibVolumesExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockLibVolumeStdout, nil
 	}
-	collector.DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcDrivesExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockDriveStdout, nil
 	}
-	collector.DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcEventsCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockEventCompletedStdout, nil
 	}
-	collector.DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcEventsNotCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockEventNotCompletedStdout, nil
 	}
-	collector.DsmadmcReplicationViewsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcReplicationViewsCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockReplicationViewCompletedStdout, nil
 	}
-	collector.DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockReplicationViewNotCompletedStdout, nil
 	}
 	body, err := queryExporter("target=test1", http.StatusOK)
@@ -137,34 +136,34 @@ func TestMetricsHandler(t *testing.T) {
 }
 
 func TestMetricsHandlerCollectorsDefined(t *testing.T) {
-	collector.DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcStatusExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockStatusStdout, nil
 	}
-	collector.DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcVolumesExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockVolumeStdout, nil
 	}
-	collector.DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcDBExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockedDBStdout, nil
 	}
-	collector.DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcLogExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockedLogStdout, nil
 	}
-	collector.DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcLibVolumesExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockLibVolumeStdout, nil
 	}
-	collector.DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcDrivesExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockDriveStdout, nil
 	}
-	collector.DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcEventsCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockEventCompletedStdout, nil
 	}
-	collector.DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcEventsNotCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockEventNotCompletedStdout, nil
 	}
-	collector.DsmadmcReplicationViewsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcReplicationViewsCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockReplicationViewCompletedStdout, nil
 	}
-	collector.DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	collector.DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockReplicationViewNotCompletedStdout, nil
 	}
 	body, err := queryExporter("target=test2", http.StatusOK)

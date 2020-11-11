@@ -14,12 +14,9 @@
 package collector
 
 import (
-	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -46,16 +43,13 @@ func TestOccupancysCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcOccupancysExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockOccupancyStdout, nil
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="occupancy"} 0
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="occupancy"} 0
 	# HELP tsm_occupancy_files Number of files
 	# TYPE tsm_occupancy_files gauge
 	tsm_occupancy_files{filespace="/fs/project",nodename="PROJECT",storagepool="PTGPFS"} 316487756
@@ -73,12 +67,12 @@ func TestOccupancysCollector(t *testing.T) {
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 9 {
-		t.Errorf("Unexpected collection count %d, expected 9", val)
+	} else if val != 8 {
+		t.Errorf("Unexpected collection count %d, expected 8", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_occupancy_files", "tsm_occupancy_logical_bytes", "tsm_occupancy_physical_bytes",
-		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
@@ -87,61 +81,29 @@ func TestOccupancysCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcOccupancysExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="occupancy"} 1
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="occupancy"} 0
 	`
 	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 3 {
-		t.Errorf("Unexpected collection count %d, expected 3", val)
+	} else if val != 2 {
+		t.Errorf("Unexpected collection count %d, expected 2", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_occupancy_files", "tsm_occupancy_logical_bytes", "tsm_occupancy_physical_bytes",
-		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
 
-func TestOccupancysCollectorTimeout(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
-		t.Fatal(err)
-	}
-	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", context.DeadlineExceeded
-	}
-	expected := `
-    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
-    # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="occupancy"} 0
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="occupancy"} 1
-	`
-	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger())
-	gatherers := setupGatherer(collector)
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 3 {
-		t.Errorf("Unexpected collection count %d, expected 3", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_occupancy_files", "tsm_occupancy_logical_bytes", "tsm_occupancy_physical_bytes",
-		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-}
-
-func TestDsmadmcOccupancys(t *testing.T) {
+/*func TestDsmadmcOccupancys(t *testing.T) {
 	execCommand = fakeExecCommand
 	mockedExitStatus = 0
 	mockedStdout = "foo"
@@ -155,4 +117,4 @@ func TestDsmadmcOccupancys(t *testing.T) {
 	if out != mockedStdout {
 		t.Errorf("Unexpected out: %s", out)
 	}
-}
+}*/

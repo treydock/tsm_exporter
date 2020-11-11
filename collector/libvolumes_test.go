@@ -14,12 +14,9 @@
 package collector
 
 import (
-	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -49,16 +46,13 @@ func TestLibVolumesCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcLibVolumesExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return mockLibVolumeStdout, nil
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="libvolumes"} 0
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="libvolumes"} 0
 	# HELP tsm_libvolume_media Number of tapes
 	# TYPE tsm_libvolume_media gauge
 	tsm_libvolume_media{mediatype="LTO-5",status="private"} 147
@@ -75,12 +69,12 @@ func TestLibVolumesCollector(t *testing.T) {
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 10 {
-		t.Errorf("Unexpected collection count %d, expected 10", val)
+	} else if val != 9 {
+		t.Errorf("Unexpected collection count %d, expected 9", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_libvolume_scratch", "tsm_libvolume_media",
-		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
@@ -89,61 +83,29 @@ func TestLibVolumesCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcLibVolumesExec = func(target *config.Target, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="libvolumes"} 1
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="libvolumes"} 0
 	`
 	collector := NewLibVolumesExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 3 {
-		t.Errorf("Unexpected collection count %d, expected 3", val)
+	} else if val != 2 {
+		t.Errorf("Unexpected collection count %d, expected 2", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_libvolume_scratch", "tsm_libvolume_media",
-		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
 
-func TestLibVolumesCollectorTimeout(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
-		t.Fatal(err)
-	}
-	DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", context.DeadlineExceeded
-	}
-	expected := `
-    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
-    # TYPE tsm_exporter_collect_error gauge
-    tsm_exporter_collect_error{collector="libvolumes"} 0
-    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
-    # TYPE tsm_exporter_collect_timeout gauge
-    tsm_exporter_collect_timeout{collector="libvolumes"} 1
-	`
-	collector := NewLibVolumesExporter(&config.Target{}, log.NewNopLogger())
-	gatherers := setupGatherer(collector)
-	if val, err := testutil.GatherAndCount(gatherers); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	} else if val != 3 {
-		t.Errorf("Unexpected collection count %d, expected 3", val)
-	}
-	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_libvolume_scratch", "tsm_libvolume_media",
-		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
-	}
-}
-
-func TestDsmadmcLibVolumes(t *testing.T) {
+/*func TestDsmadmcLibVolumes(t *testing.T) {
 	execCommand = fakeExecCommand
 	mockedExitStatus = 0
 	mockedStdout = "foo"
@@ -157,4 +119,4 @@ func TestDsmadmcLibVolumes(t *testing.T) {
 	if out != mockedStdout {
 		t.Errorf("Unexpected out: %s", out)
 	}
-}
+}*/

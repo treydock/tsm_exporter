@@ -14,7 +14,6 @@
 package collector
 
 import (
-	"context"
 	"strings"
 	"time"
 
@@ -63,10 +62,7 @@ func (c *StatusCollector) Collect(ch chan<- prometheus.Metric) {
 	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
 	metrics, err := c.collect()
-	if err == context.DeadlineExceeded {
-		metrics.status = 0
-		metrics.reason = "timeout"
-	} else if err != nil {
+	if err != nil {
 		level.Error(c.logger).Log("msg", err)
 		metrics.status = 0
 		metrics.reason = "error"
@@ -78,9 +74,7 @@ func (c *StatusCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *StatusCollector) collect() (StatusMetric, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*statusTimeout)*time.Second)
-	defer cancel()
-	out, err := DsmadmcStatusExec(c.target, ctx, c.logger)
+	out, err := DsmadmcStatusExec(c.target, c.logger)
 	if err != nil {
 		return StatusMetric{}, err
 	}
@@ -88,9 +82,9 @@ func (c *StatusCollector) collect() (StatusMetric, error) {
 	return metrics, nil
 }
 
-func dsmadmcStatus(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcStatus(target *config.Target, logger log.Logger) (string, error) {
 	query := "QUERY STATUS"
-	out, err := dsmadmcQuery(target, query, ctx, logger)
+	out, err := dsmadmcQuery(target, query, *statusTimeout, logger)
 	return out, err
 }
 

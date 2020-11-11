@@ -14,7 +14,6 @@
 package collector
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -75,12 +74,9 @@ func (c *StoragePoolCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *StoragePoolCollector) Collect(ch chan<- prometheus.Metric) {
 	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
-	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
-	if err == context.DeadlineExceeded {
-		timeout = 1
-	} else if err != nil {
+	if err != nil {
 		level.Error(c.logger).Log("msg", err)
 		errorMetric = 1
 	}
@@ -90,14 +86,11 @@ func (c *StoragePoolCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "stgpools")
-	ch <- prometheus.MustNewConstMetric(collecTimeout, prometheus.GaugeValue, float64(timeout), "stgpools")
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "stgpools")
 }
 
 func (c *StoragePoolCollector) collect() ([]StoragePoolMetric, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*stgpoolsTimeout)*time.Second)
-	defer cancel()
-	out, err := DsmadmcStoragePoolExec(c.target, ctx, c.logger)
+	out, err := DsmadmcStoragePoolExec(c.target, c.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -105,10 +98,10 @@ func (c *StoragePoolCollector) collect() ([]StoragePoolMetric, error) {
 	return metrics, nil
 }
 
-func dsmadmcStoragePool(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcStoragePool(target *config.Target, logger log.Logger) (string, error) {
 	fields := getStoragePoolFields()
 	query := fmt.Sprintf("SELECT %s FROM stgpools", strings.Join(fields, ","))
-	out, err := dsmadmcQuery(target, query, ctx, logger)
+	out, err := dsmadmcQuery(target, query, *stgpoolsTimeout, logger)
 	return out, err
 }
 
