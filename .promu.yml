@@ -22,7 +22,6 @@ tarball:
 crossbuild:
     platforms:
         - linux/amd64
-        - aix/ppc64
         - linux/ppc64
         - linux/ppc64le
         - linux/s390x
