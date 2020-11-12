@@ -48,12 +48,12 @@ func TestDBCollector(t *testing.T) {
 		return mockedDBStdout, nil
 	}
 	expected := `
-	# HELP tsm_db_buffer_hit_ratio DB buffer hit ratio
+	# HELP tsm_db_buffer_hit_ratio DB buffer hit ratio (0.0-1.0)
 	# TYPE tsm_db_buffer_hit_ratio gauge
-	tsm_db_buffer_hit_ratio{dbname="TSMDB1"} 88.6
-	# HELP tsm_db_buffer_total_requests DB total buffer requests
-	# TYPE tsm_db_buffer_total_requests counter
-	tsm_db_buffer_total_requests{dbname="TSMDB1"} 11607707032
+	tsm_db_buffer_hit_ratio{dbname="TSMDB1"} 0.8859999999999999
+	# HELP tsm_db_buffer_requests_total DB total buffer requests
+	# TYPE tsm_db_buffer_requests_total counter
+	tsm_db_buffer_requests_total{dbname="TSMDB1"} 11607707032
 	# HELP tsm_db_pages_free DB free pages
 	# TYPE tsm_db_pages_free gauge
 	# HELP tsm_db_last_backup_time Time since last backup in epoch
@@ -69,9 +69,9 @@ func TestDBCollector(t *testing.T) {
 	# HELP tsm_db_pages_used DB used pages
 	# TYPE tsm_db_pages_used gauge
 	tsm_db_pages_used{dbname="TSMDB1"} 25743296
-	# HELP tsm_db_pkg_hit_ratio DB pkg hit ratio
+	# HELP tsm_db_pkg_hit_ratio DB pkg hit ratio (0.0-1.0)
 	# TYPE tsm_db_pkg_hit_ratio gauge
-	tsm_db_pkg_hit_ratio{dbname="TSMDB1"} 98.3
+	tsm_db_pkg_hit_ratio{dbname="TSMDB1"} 0.983
 	# HELP tsm_db_sort_overflow DB sort overflow
 	# TYPE tsm_db_sort_overflow gauge
 	tsm_db_sort_overflow{dbname="TSMDB1"} 0
@@ -100,7 +100,7 @@ func TestDBCollector(t *testing.T) {
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_db_space_total_bytes", "tsm_db_space_used_bytes", "tsm_db_space_free_bytes",
 		"tsm_db_pages_total", "tsm_db_pages_usable", "tsm_db_pages_used", "tsm_db_pages_free",
-		"tsm_db_buffer_hit_ratio", "tsm_db_buffer_total_requests", "tsm_db_sort_overflow", "tsm_db_pkg_hit_ratio",
+		"tsm_db_buffer_hit_ratio", "tsm_db_buffer_requests_total", "tsm_db_sort_overflow", "tsm_db_pkg_hit_ratio",
 		"tsm_db_last_backup_time",
 		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
