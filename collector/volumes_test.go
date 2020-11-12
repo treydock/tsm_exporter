@@ -61,12 +61,12 @@ func TestVolumesCollector(t *testing.T) {
 	tsm_volume_estimated_capacity_bytes{classname="DCULT7",volume="F00397L7"} 9507748970496
 	tsm_volume_estimated_capacity_bytes{classname="DCULT7",volume="F00529L7"} 6013946167296
 	tsm_volume_estimated_capacity_bytes{classname="DCULT7",volume="F00640L7"} 8597764308992
-	# HELP tsm_volume_utilized_percent Volume percent utilized
+	# HELP tsm_volume_utilized_percent Volume percent utilized (ratio of 0.0-1.0)
 	# TYPE tsm_volume_utilized_percent gauge
-	tsm_volume_utilized_percent{classname="DCULT6E",volume="E00090L6"} 100
-	tsm_volume_utilized_percent{classname="DCULT7",volume="F00397L7"} 43.7
-	tsm_volume_utilized_percent{classname="DCULT7",volume="F00529L7"} 94.6
-	tsm_volume_utilized_percent{classname="DCULT7",volume="F00640L7"} 68.5
+	tsm_volume_utilized_percent{classname="DCULT6E",volume="E00090L6"} 1.00
+	tsm_volume_utilized_percent{classname="DCULT7",volume="F00397L7"} 0.43700000000000006
+	tsm_volume_utilized_percent{classname="DCULT7",volume="F00529L7"} 0.946
+	tsm_volume_utilized_percent{classname="DCULT7",volume="F00640L7"} 0.685
     # HELP tsm_volumes_readonly Number of readonly volumes
     # TYPE tsm_volumes_readonly gauge
     tsm_volumes_readonly 1

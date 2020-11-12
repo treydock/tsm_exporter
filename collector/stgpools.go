@@ -61,7 +61,7 @@ func init() {
 func NewStoragePoolExporter(target *config.Target, logger log.Logger) Collector {
 	return &StoragePoolCollector{
 		PercentUtilized: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "utilized_percent"),
-			"Storage pool utilized percent", []string{"storagepool", "pooltype", "classname", "storagetype"}, nil),
+			"Storage pool utilized percent (ratio of 0.0-1.0)", []string{"storagepool", "pooltype", "classname", "storagetype"}, nil),
 		target: target,
 		logger: logger,
 	}
@@ -129,11 +129,11 @@ func stgpoolsParse(out string, logger log.Logger) []StoragePoolMetric {
 					continue
 				}
 				if strings.HasSuffix(k, "_MB") {
-					valBytes := val * 1024 * 1024
-					f.SetFloat(valBytes)
-				} else {
-					f.SetFloat(val)
+					val = val * 1024 * 1024
+				} else if strings.Contains(field, "Percent") {
+					val = val / 100
 				}
+				f.SetFloat(val)
 			}
 		}
 		metrics = append(metrics, metric)

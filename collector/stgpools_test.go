@@ -53,11 +53,11 @@ func TestStoragePoolCollector(t *testing.T) {
 		return mockedStoragePoolStdout, nil
 	}
 	expected := `
-	# HELP tsm_storage_pool_utilized_percent Storage pool utilized percent
+	# HELP tsm_storage_pool_utilized_percent Storage pool utilized percent (ratio of 0.0-1.0)
 	# TYPE tsm_storage_pool_utilized_percent gauge
 	tsm_storage_pool_utilized_percent{classname="DISK",pooltype="PRIMARY",storagepool="ARCHIVEPOOL",storagetype="DEVCLASS"} 0.0
-	tsm_storage_pool_utilized_percent{classname="DCFILEE",pooltype="PRIMARY",storagepool="EPFESS",storagetype="DEVCLASS"} 41.8
-	tsm_storage_pool_utilized_percent{classname="DCULT7",pooltype="PRIMARY",storagepool="PTGPFS",storagetype="DEVCLASS"} 42.6
+	tsm_storage_pool_utilized_percent{classname="DCFILEE",pooltype="PRIMARY",storagepool="EPFESS",storagetype="DEVCLASS"} 0.418
+	tsm_storage_pool_utilized_percent{classname="DCULT7",pooltype="PRIMARY",storagepool="PTGPFS",storagetype="DEVCLASS"} 0.426
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="stgpools"} 0

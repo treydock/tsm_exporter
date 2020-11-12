@@ -102,13 +102,13 @@ func NewDBExporter(target *config.Target, logger log.Logger) Collector {
 		FreePages: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "pages_free"),
 			"DB free pages", []string{"dbname"}, nil),
 		BuffHitRatio: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "buffer_hit_ratio"),
-			"DB buffer hit ratio", []string{"dbname"}, nil),
-		TotalBuffReq: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "buffer_total_requests"),
+			"DB buffer hit ratio (0.0-1.0)", []string{"dbname"}, nil),
+		TotalBuffReq: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "buffer_requests_total"),
 			"DB total buffer requests", []string{"dbname"}, nil),
 		SortOverflow: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "sort_overflow"),
 			"DB sort overflow", []string{"dbname"}, nil),
 		PkgHitRatio: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "pkg_hit_ratio"),
-			"DB pkg hit ratio", []string{"dbname"}, nil),
+			"DB pkg hit ratio (0.0-1.0)", []string{"dbname"}, nil),
 		LastBackup: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "last_backup_time"),
 			"Time since last backup in epoch", []string{"dbname"}, nil),
 		target: target,
@@ -205,11 +205,11 @@ func dbParse(out string, logger log.Logger) []DBMetric {
 					continue
 				}
 				if strings.HasSuffix(k, "_MB") {
-					valBytes := val * 1024 * 1024
-					f.SetFloat(valBytes)
-				} else {
-					f.SetFloat(val)
+					val = val * 1024 * 1024
+				} else if strings.HasSuffix(k, "_RATIO") {
+					val = val / 100
 				}
+				f.SetFloat(val)
 			}
 		}
 		metrics = append(metrics, metric)

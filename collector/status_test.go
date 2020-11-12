@@ -60,7 +60,7 @@ func TestStatusCollector(t *testing.T) {
 	expected := `
     # HELP tsm_status Status of TSM, 1=online 0=failure
     # TYPE tsm_status gauge
-    tsm_status{reason="",servername="SP03"} 1
+    tsm_status 1
 	`
 	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
@@ -86,7 +86,7 @@ func TestStatusCollectorError(t *testing.T) {
 	expected := `
     # HELP tsm_status Status of TSM, 1=online 0=failure
     # TYPE tsm_status gauge
-    tsm_status{reason="error",servername=""} 0
+    tsm_status 0
 	`
 	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
