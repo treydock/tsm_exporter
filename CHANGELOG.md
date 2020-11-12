@@ -9,6 +9,7 @@
 * Improve events collector to not require saving any data in memory, remove --collector.events.duration-cache flag
 * Improve replicationview collector to not store any data in memory, remove --collector.replicationview.metric-cache flag
 * Remove tsm_exporter_collect_timeout metric
+* Remove tsm_libvolume_scratch metric, use sum(tsm_libvolume_media{status="scratch"}) instead
 
 ### Improvements
 

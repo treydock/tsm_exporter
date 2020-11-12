@@ -38,10 +38,9 @@ type LibVolumeMetric struct {
 }
 
 type LibVolumesCollector struct {
-	scratch *prometheus.Desc
-	media   *prometheus.Desc
-	target  *config.Target
-	logger  log.Logger
+	media  *prometheus.Desc
+	target *config.Target
+	logger log.Logger
 }
 
 func init() {
@@ -50,8 +49,6 @@ func init() {
 
 func NewLibVolumesExporter(target *config.Target, logger log.Logger) Collector {
 	return &LibVolumesCollector{
-		scratch: prometheus.NewDesc(prometheus.BuildFQName(namespace, "libvolume", "scratch"),
-			"Number of scratch tapes", nil, nil),
 		media: prometheus.NewDesc(prometheus.BuildFQName(namespace, "libvolume", "media"),
 			"Number of tapes", []string{"mediatype", "status"}, nil),
 		target: target,
@@ -60,7 +57,6 @@ func NewLibVolumesExporter(target *config.Target, logger log.Logger) Collector {
 }
 
 func (c *LibVolumesCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.scratch
 	ch <- c.media
 }
 
@@ -74,15 +70,8 @@ func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
 		errorMetric = 1
 	}
 
-	var scratch float64
 	for _, m := range metrics {
-		if m.status == "scratch" {
-			scratch += m.count
-		}
 		ch <- prometheus.MustNewConstMetric(c.media, prometheus.GaugeValue, m.count, m.mediatype, m.status)
-	}
-	if err == nil {
-		ch <- prometheus.MustNewConstMetric(c.scratch, prometheus.GaugeValue, scratch)
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "libvolumes")

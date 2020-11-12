@@ -61,19 +61,16 @@ func TestLibVolumesCollector(t *testing.T) {
 	tsm_libvolume_media{mediatype="LTO-6",status="scratch"} 365
 	tsm_libvolume_media{mediatype="LTO-7",status="private"} 1082
 	tsm_libvolume_media{mediatype="LTO-7",status="scratch"} 153
-    # HELP tsm_libvolume_scratch Number of scratch tapes
-    # TYPE tsm_libvolume_scratch gauge
-    tsm_libvolume_scratch 860
 	`
 	collector := NewLibVolumesExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 9 {
-		t.Errorf("Unexpected collection count %d, expected 9", val)
+	} else if val != 8 {
+		t.Errorf("Unexpected collection count %d, expected 8", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_libvolume_scratch", "tsm_libvolume_media",
+		"tsm_libvolume_media",
 		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -99,7 +96,7 @@ func TestLibVolumesCollectorError(t *testing.T) {
 		t.Errorf("Unexpected collection count %d, expected 2", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_libvolume_scratch", "tsm_libvolume_media",
+		"tsm_libvolume_media",
 		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
