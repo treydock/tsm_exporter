@@ -1,6 +1,6 @@
-## 0.7.0 / TBD
+## 1.0.0-rc.0 / TBD
 
-### BREAKING CHANGES
+### **Breaking Changes**
 
 * Remove --exporter.use-cache flag and all caching logic
 * For drive metrics, replace name label with drive
@@ -10,8 +10,11 @@
 * Improve replicationview collector to not store any data in memory, remove --collector.replicationview.metric-cache flag
 * Remove tsm_exporter_collect_timeout metric
 * Remove tsm_libvolume_scratch metric, use sum(tsm_libvolume_media{status="scratch"}) instead
+* Make percent metrics into ratios
+  * tsm_storage_pool_utilized_percent
+  * tsm_volume_utilized_percent
 
-### Improvements
+### Changes
 
 * Run dsmadmc using goexpect rather than passing password at command line
 
