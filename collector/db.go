@@ -109,7 +109,7 @@ func NewDBExporter(target *config.Target, logger log.Logger) Collector {
 			"DB sort overflow", []string{"dbname"}, nil),
 		PkgHitRatio: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "pkg_hit_ratio"),
 			"DB pkg hit ratio (0.0-1.0)", []string{"dbname"}, nil),
-		LastBackup: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "last_backup_time"),
+		LastBackup: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "last_backup_timestamp_seconds"),
 			"Time since last backup in epoch", []string{"dbname"}, nil),
 		target: target,
 		logger: logger,

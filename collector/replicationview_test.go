@@ -106,6 +106,12 @@ func TestReplicationViewsCollector(t *testing.T) {
 	tsm_replication_duration_seconds{fsname="/TEST4",nodename="TEST2DB2"} 19276
 	tsm_replication_duration_seconds{fsname="/BAR",nodename="FOO"} 0
 	tsm_replication_duration_seconds{fsname="/BAZ",nodename="BAR"} 0
+	# HELP tsm_replication_end_timestamp_seconds End time of replication
+	# TYPE tsm_replication_end_timestamp_seconds gauge
+	tsm_replication_end_timestamp_seconds{fsname="/TEST2CONF",nodename="TEST2DB2"} 1584943605
+	tsm_replication_end_timestamp_seconds{fsname="/TEST4",nodename="TEST2DB2"} 1584943605
+	tsm_replication_end_timestamp_seconds{fsname="/BAR",nodename="FOO"} 0
+	tsm_replication_end_timestamp_seconds{fsname="/BAZ",nodename="BAR"} 0
 	# HELP tsm_replication_not_completed Number of replications not completed for today
 	# TYPE tsm_replication_not_completed gauge
 	tsm_replication_not_completed{fsname="/TEST2CONF",nodename="TEST2DB2"} 0
@@ -124,6 +130,12 @@ func TestReplicationViewsCollector(t *testing.T) {
 	tsm_replication_replicated_files{fsname="/TEST4",nodename="TEST2DB2"} 2
 	tsm_replication_replicated_files{fsname="/BAR",nodename="FOO"} 0
 	tsm_replication_replicated_files{fsname="/BAZ",nodename="BAR"} 0
+	# HELP tsm_replication_start_timestamp_seconds Start time of replication
+	# TYPE tsm_replication_start_timestamp_seconds gauge
+	tsm_replication_start_timestamp_seconds{fsname="/TEST2CONF",nodename="TEST2DB2"} 1584924329
+	tsm_replication_start_timestamp_seconds{fsname="/TEST4",nodename="TEST2DB2"} 1584924329
+	tsm_replication_start_timestamp_seconds{fsname="/BAR",nodename="FOO"} 0
+	tsm_replication_start_timestamp_seconds{fsname="/BAZ",nodename="BAR"} 0
 	`
 	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
@@ -135,6 +147,7 @@ func TestReplicationViewsCollector(t *testing.T) {
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
 		"tsm_replication_replicated_bytes", "tsm_replication_replicated_files",
+		"tsm_replication_start_timestamp_seconds", "tsm_replication_end_timestamp_seconds",
 		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}

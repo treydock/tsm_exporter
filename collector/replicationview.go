@@ -63,9 +63,9 @@ func NewReplicationViewsExporter(target *config.Target, logger log.Logger) Colle
 	return &ReplicationViewsCollector{
 		NotCompleted: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "not_completed"),
 			"Number of replications not completed for today", []string{"nodename", "fsname"}, nil),
-		StartTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "start_time"),
+		StartTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "start_timestamp_seconds"),
 			"Start time of replication", []string{"nodename", "fsname"}, nil),
-		EndTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "end_time"),
+		EndTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "end_timestamp_seconds"),
 			"End time of replication", []string{"nodename", "fsname"}, nil),
 		Duration: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "duration_seconds"),
 			"Amount of time taken to complete the most recent replication", []string{"nodename", "fsname"}, nil),

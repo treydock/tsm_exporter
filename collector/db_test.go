@@ -56,9 +56,9 @@ func TestDBCollector(t *testing.T) {
 	tsm_db_buffer_requests_total{dbname="TSMDB1"} 11607707032
 	# HELP tsm_db_pages_free DB free pages
 	# TYPE tsm_db_pages_free gauge
-	# HELP tsm_db_last_backup_time Time since last backup in epoch
-	# TYPE tsm_db_last_backup_time gauge
-	tsm_db_last_backup_time{dbname="TSMDB1"} 1.590135e+09
+	# HELP tsm_db_last_backup_timestamp_seconds Time since last backup in epoch
+	# TYPE tsm_db_last_backup_timestamp_seconds gauge
+	tsm_db_last_backup_timestamp_seconds{dbname="TSMDB1"} 1.590135e+09
 	tsm_db_pages_free{dbname="TSMDB1"} 3092796
 	# HELP tsm_db_pages_total DB total pages
 	# TYPE tsm_db_pages_total gauge
@@ -101,7 +101,7 @@ func TestDBCollector(t *testing.T) {
 		"tsm_db_space_total_bytes", "tsm_db_space_used_bytes", "tsm_db_space_free_bytes",
 		"tsm_db_pages_total", "tsm_db_pages_usable", "tsm_db_pages_used", "tsm_db_pages_free",
 		"tsm_db_buffer_hit_ratio", "tsm_db_buffer_requests_total", "tsm_db_sort_overflow", "tsm_db_pkg_hit_ratio",
-		"tsm_db_last_backup_time",
+		"tsm_db_last_backup_timestamp_seconds",
 		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
