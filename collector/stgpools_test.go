@@ -53,11 +53,11 @@ func TestStoragePoolCollector(t *testing.T) {
 		return mockedStoragePoolStdout, nil
 	}
 	expected := `
-	# HELP tsm_storage_pool_utilized_percent Storage pool utilized percent (ratio of 0.0-1.0)
-	# TYPE tsm_storage_pool_utilized_percent gauge
-	tsm_storage_pool_utilized_percent{classname="DISK",pooltype="PRIMARY",storagepool="ARCHIVEPOOL",storagetype="DEVCLASS"} 0.0
-	tsm_storage_pool_utilized_percent{classname="DCFILEE",pooltype="PRIMARY",storagepool="EPFESS",storagetype="DEVCLASS"} 0.418
-	tsm_storage_pool_utilized_percent{classname="DCULT7",pooltype="PRIMARY",storagepool="PTGPFS",storagetype="DEVCLASS"} 0.426
+	# HELP tsm_storage_pool_utilized_ratio Storage pool utilized ratio, 0.0-1.0
+	# TYPE tsm_storage_pool_utilized_ratio gauge
+	tsm_storage_pool_utilized_ratio{classname="DISK",pooltype="PRIMARY",storagepool="ARCHIVEPOOL",storagetype="DEVCLASS"} 0.0
+	tsm_storage_pool_utilized_ratio{classname="DCFILEE",pooltype="PRIMARY",storagepool="EPFESS",storagetype="DEVCLASS"} 0.418
+	tsm_storage_pool_utilized_ratio{classname="DCULT7",pooltype="PRIMARY",storagepool="PTGPFS",storagetype="DEVCLASS"} 0.426
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="stgpools"} 0
@@ -72,7 +72,7 @@ func TestStoragePoolCollector(t *testing.T) {
 		t.Errorf("Unexpected collection count %d, expected 5", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_storage_pool_utilized_percent",
+		"tsm_storage_pool_utilized_ratio",
 		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -98,7 +98,7 @@ func TestStoragePoolCollectorError(t *testing.T) {
 		t.Errorf("Unexpected collection count %d, expected 2", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_storage_pool_utilized_percent", "tsm_exporter_collect_error"); err != nil {
+		"tsm_storage_pool_utilized_ratio", "tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }

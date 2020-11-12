@@ -11,8 +11,8 @@
 * Remove tsm_exporter_collect_timeout metric
 * Remove tsm_libvolume_scratch metric, use sum(tsm_libvolume_media{status="scratch"}) instead
 * Make percent metrics into ratios
-  * tsm_storage_pool_utilized_percent
-  * tsm_volume_utilized_percent
+  * Rename tsm_storage_pool_utilized_percent to tsm_storage_pool_utilized_ratio
+  * Rename tsm_volume_utilized_percent to tsm_volume_utilized_ratio
 * Remove reason and servername label from tsm_status
 * Make tsm_db_buffer_hit_ratio and tsm_db_pkg_hit_ratio a ratio between 0.0-1.0
 * Rename tsm_db_buffer_total_requests to tsm_db_buffer_requests_total
