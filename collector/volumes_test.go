@@ -61,12 +61,12 @@ func TestVolumesCollector(t *testing.T) {
 	tsm_volume_estimated_capacity_bytes{classname="DCULT7",volume="F00397L7"} 9507748970496
 	tsm_volume_estimated_capacity_bytes{classname="DCULT7",volume="F00529L7"} 6013946167296
 	tsm_volume_estimated_capacity_bytes{classname="DCULT7",volume="F00640L7"} 8597764308992
-	# HELP tsm_volume_utilized_percent Volume percent utilized (ratio of 0.0-1.0)
-	# TYPE tsm_volume_utilized_percent gauge
-	tsm_volume_utilized_percent{classname="DCULT6E",volume="E00090L6"} 1.00
-	tsm_volume_utilized_percent{classname="DCULT7",volume="F00397L7"} 0.43700000000000006
-	tsm_volume_utilized_percent{classname="DCULT7",volume="F00529L7"} 0.946
-	tsm_volume_utilized_percent{classname="DCULT7",volume="F00640L7"} 0.685
+	# HELP tsm_volume_utilized_ratio Volume utilized ratio, 0.0-1.0
+	# TYPE tsm_volume_utilized_ratio gauge
+	tsm_volume_utilized_ratio{classname="DCULT6E",volume="E00090L6"} 1.00
+	tsm_volume_utilized_ratio{classname="DCULT7",volume="F00397L7"} 0.43700000000000006
+	tsm_volume_utilized_ratio{classname="DCULT7",volume="F00529L7"} 0.946
+	tsm_volume_utilized_ratio{classname="DCULT7",volume="F00640L7"} 0.685
     # HELP tsm_volumes_readonly Number of readonly volumes
     # TYPE tsm_volumes_readonly gauge
     tsm_volumes_readonly 1
@@ -84,7 +84,7 @@ func TestVolumesCollector(t *testing.T) {
 		t.Errorf("Unexpected collection count %d, expected 12", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_volumes_unavailable", "tsm_volumes_readonly", "tsm_volume_estimated_capacity_bytes", "tsm_volume_utilized_percent",
+		"tsm_volumes_unavailable", "tsm_volumes_readonly", "tsm_volume_estimated_capacity_bytes", "tsm_volume_utilized_ratio",
 		"tsm_exporter_collect_error"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
