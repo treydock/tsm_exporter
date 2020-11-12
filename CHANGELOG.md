@@ -13,6 +13,7 @@
 * Make percent metrics into ratios
   * tsm_storage_pool_utilized_percent
   * tsm_volume_utilized_percent
+* Remove reason and servername label from tsm_status
 
 ### Changes
 

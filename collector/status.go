@@ -48,7 +48,7 @@ func init() {
 func NewStatusExporter(target *config.Target, logger log.Logger) Collector {
 	return &StatusCollector{
 		status: prometheus.NewDesc(prometheus.BuildFQName(namespace, "", "status"),
-			"Status of TSM, 1=online 0=failure", []string{"servername", "reason"}, nil),
+			"Status of TSM, 1=online 0=failure", nil, nil),
 		target: target,
 		logger: logger,
 	}
@@ -68,7 +68,12 @@ func (c *StatusCollector) Collect(ch chan<- prometheus.Metric) {
 		metrics.reason = "error"
 	}
 
-	ch <- prometheus.MustNewConstMetric(c.status, prometheus.GaugeValue, metrics.status, metrics.serverName, metrics.reason)
+	if metrics.status == 0 {
+		level.Error(c.logger).Log("msg", "TSM query status is not healthy",
+			"servername", metrics.serverName, "reason", metrics.reason, "err", err)
+	}
+
+	ch <- prometheus.MustNewConstMetric(c.status, prometheus.GaugeValue, metrics.status)
 
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "status")
 }
