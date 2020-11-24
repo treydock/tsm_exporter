@@ -10,6 +10,8 @@ ExecStart=/usr/local/bin/tsm_exporter --config.file=/etc/tsm_exporter.yaml
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
 Restart=always
+StandardOutput=tty
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
