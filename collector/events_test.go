@@ -14,8 +14,10 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -90,16 +92,19 @@ func TestEventsCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcEventsCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockEventCompletedStdout, nil
 	}
-	DsmadmcEventsNotCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockEventNotCompletedStdout, nil
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="events"} 0
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="events"} 0
 	# HELP tsm_schedule_duration_seconds Amount of time taken to complete the most recent completed scheduled event
 	# TYPE tsm_schedule_duration_seconds gauge
 	tsm_schedule_duration_seconds{schedule="BAR"} 0
@@ -115,12 +120,12 @@ func TestEventsCollector(t *testing.T) {
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 6 {
-		t.Errorf("Unexpected collection count %d, expected 6", val)
+	} else if val != 7 {
+		t.Errorf("Unexpected collection count %d, expected 7", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds",
-		"tsm_exporter_collect_error"); err != nil {
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
@@ -129,32 +134,67 @@ func TestEventsCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcEventsCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	DsmadmcEventsNotCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="events"} 1
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="events"} 0
 	`
 	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 2 {
-		t.Errorf("Unexpected collection count %d, expected 2", val)
+	} else if val != 3 {
+		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds",
-		"tsm_exporter_collect_error"); err != nil {
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
 
-/*func TestDsmadmcEventsCompleted(t *testing.T) {
+func TestEventsCollectorTimeout(t *testing.T) {
+	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
+		t.Fatal(err)
+	}
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", context.DeadlineExceeded
+	}
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", context.DeadlineExceeded
+	}
+	expected := `
+    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
+    # TYPE tsm_exporter_collect_error gauge
+    tsm_exporter_collect_error{collector="events"} 0
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="events"} 1
+	`
+	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger())
+	gatherers := setupGatherer(collector)
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 3 {
+		t.Errorf("Unexpected collection count %d, expected 3", val)
+	}
+	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
+		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds",
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		t.Errorf("unexpected collecting result:\n%s", err)
+	}
+}
+
+func TestDsmadmcEventsCompleted(t *testing.T) {
 	execCommand = fakeExecCommand
 	mockedExitStatus = 0
 	mockedStdout = "foo"
@@ -184,4 +224,4 @@ func TestDsmadmcEventsNotCompleted(t *testing.T) {
 	if out != mockedStdout {
 		t.Errorf("Unexpected out: %s", out)
 	}
-}*/
+}
