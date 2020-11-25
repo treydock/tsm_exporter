@@ -16,7 +16,6 @@ package collector
 import (
 	"context"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -146,13 +145,13 @@ func volumesParse(out string, logger log.Logger) []VolumeMetric {
 			continue
 		}
 		metric.access = items[0]
-		capacity, err := strconv.ParseFloat(items[1], 64)
+		capacity, err := parseFloat(items[1])
 		if err != nil {
 			level.Error(logger).Log("msg", "Error parsing est_capacity_mb", "value", items[1], "err", err)
 			continue
 		}
 		metric.capacity = capacity * 1024 * 1024
-		utilized, err := strconv.ParseFloat(items[2], 64)
+		utilized, err := parseFloat(items[2])
 		if err != nil {
 			level.Error(logger).Log("msg", "Error parsing pct_utilized value", "value", items[2], "err", err)
 			continue

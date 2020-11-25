@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -102,6 +103,18 @@ func boolToFloat64(data bool) float64 {
 	} else {
 		return float64(0)
 	}
+}
+
+func parseFloat(v string) (float64, error) {
+	if strings.Contains(v, ",") {
+		values := strings.Split(v, ",")
+		last := values[len(values)-1]
+		if len(values) == 2 && (len(last) == 1 || len(last) == 2) {
+			v = strings.Join(values, ".")
+		}
+	}
+	value, err := strconv.ParseFloat(v, 64)
+	return value, err
 }
 
 func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logger log.Logger) (string, error) {

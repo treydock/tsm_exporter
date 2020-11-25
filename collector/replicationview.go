@@ -16,7 +16,6 @@ package collector
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -197,12 +196,12 @@ func replicationviewParse(completedOut string, notCompletedOut string, logger lo
 			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", values[3], "err", err)
 			continue
 		}
-		replicatedFiles, err := strconv.ParseFloat(values[4], 64)
+		replicatedFiles, err := parseFloat(values[4])
 		if err != nil {
 			level.Error(logger).Log("msg", "Error parsing replicated files", "value", values[4], "err", err)
 			continue
 		}
-		replicatedBytes, err := strconv.ParseFloat(values[5], 64)
+		replicatedBytes, err := parseFloat(values[5])
 		if err != nil {
 			level.Error(logger).Log("msg", "Error parsing replicated bytes", "value", values[5], "err", err)
 			continue

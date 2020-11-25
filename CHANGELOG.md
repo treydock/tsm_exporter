@@ -25,6 +25,7 @@
 * Add Docker container
 * Fix libvolume query
 * Add `library` label to `tsm_libvolume_media` metric
+* Fix parsing to handle cases where TSM queries return decimal numbers with a comma instead of a period
 
 ## 0.6.0 / 2020-11-06
 

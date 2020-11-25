@@ -16,7 +16,6 @@ package collector
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -122,7 +121,7 @@ func libvolumesParse(out string, logger log.Logger) []LibVolumeMetric {
 		metric.mediatype = items[0]
 		metric.status = items[1]
 		metric.library = items[2]
-		count, err := strconv.ParseFloat(items[3], 64)
+		count, err := parseFloat(items[3])
 		if err != nil {
 			level.Error(logger).Log("msg", fmt.Sprintf("Error parsing libvolume value '%s': %s", items[3], err.Error()))
 			continue

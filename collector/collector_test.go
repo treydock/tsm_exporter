@@ -90,3 +90,44 @@ func TestDsmadmcQueryWithNoResultsError(t *testing.T) {
 		t.Errorf("Unexpected out: %s", out)
 	}
 }
+
+func TestParseFloat(t *testing.T) {
+	tests := []struct {
+		Input         string
+		Output        float64
+		ExpectedError string
+	}{
+		{
+			Input:         "99,5",
+			Output:        99.5,
+			ExpectedError: "",
+		},
+		{
+			Input:         "13,52",
+			Output:        13.52,
+			ExpectedError: "",
+		},
+		{
+			Input:         "1,500",
+			Output:        0,
+			ExpectedError: "strconv.ParseFloat: parsing \"1,500\": invalid syntax",
+		},
+	}
+	for i, test := range tests {
+		val, err := parseFloat(test.Input)
+		if test.ExpectedError == "" {
+			if err != nil {
+				t.Errorf("Unexpected error in case %v: %v", i, err)
+			}
+		} else {
+			if err == nil {
+				t.Errorf("Expected error in case %v", i)
+			} else if err.Error() != test.ExpectedError {
+				t.Errorf("Unexpected error in case %v:\nExpected: %v\nGot: %v", i, test.ExpectedError, err.Error())
+			}
+		}
+		if val != test.Output {
+			t.Errorf("Unexpected value in case %v:\nExpected: %v\nGot: %v", i, test.Output, val)
+		}
+	}
+}
