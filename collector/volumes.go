@@ -14,6 +14,7 @@
 package collector
 
 import (
+	"context"
 	"regexp"
 	"strconv"
 	"strings"
@@ -78,9 +79,12 @@ func (c *VolumesCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *VolumesCollector) Collect(ch chan<- prometheus.Metric) {
 	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
+	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
-	if err != nil {
+	if err == context.DeadlineExceeded {
+		timeout = 1
+	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
 		errorMetric = 1
 	}
@@ -103,11 +107,14 @@ func (c *VolumesCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "volumes")
+	ch <- prometheus.MustNewConstMetric(collecTimeout, prometheus.GaugeValue, float64(timeout), "volumes")
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "volumes")
 }
 
 func (c *VolumesCollector) collect() ([]VolumeMetric, error) {
-	out, err := DsmadmcVolumesExec(c.target, c.logger)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*volumesTimeout)*time.Second)
+	defer cancel()
+	out, err := DsmadmcVolumesExec(c.target, ctx, c.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -115,9 +122,9 @@ func (c *VolumesCollector) collect() ([]VolumeMetric, error) {
 	return metrics, nil
 }
 
-func dsmadmcVolumes(target *config.Target, logger log.Logger) (string, error) {
+func dsmadmcVolumes(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 	query := "SELECT access,est_capacity_mb,pct_utilized,devclass_name,volume_name FROM volumes"
-	out, err := dsmadmcQuery(target, query, *volumesTimeout, logger)
+	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 

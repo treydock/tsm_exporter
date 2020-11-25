@@ -14,9 +14,12 @@
 package collector
 
 import (
+	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -39,7 +42,7 @@ func TestLogCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcLogExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockedLogStdout, nil
 	}
 	expected := `
@@ -55,17 +58,20 @@ func TestLogCollector(t *testing.T) {
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="log"} 0
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="log"} 0
 	`
 	collector := NewLogExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 5 {
-		t.Errorf("Unexpected collection count %d, expected 5", val)
+	} else if val != 6 {
+		t.Errorf("Unexpected collection count %d, expected 6", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_active_log_free_bytes", "tsm_active_log_total_bytes", "tsm_active_log_used_bytes",
-		"tsm_exporter_collect_error"); err != nil {
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
@@ -74,29 +80,61 @@ func TestLogCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcLogExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="log"} 1
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="log"} 0
 	`
 	collector := NewLogExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 2 {
-		t.Errorf("Unexpected collection count %d, expected 2", val)
+	} else if val != 3 {
+		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_active_log_free_bytes", "tsm_active_log_total_bytes", "tsm_active_log_used_bytes",
-		"tsm_exporter_collect_error"); err != nil {
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
 
-/*func TestDsmadmcLog(t *testing.T) {
+func TestLogCollectorTimeout(t *testing.T) {
+	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
+		t.Fatal(err)
+	}
+	DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", context.DeadlineExceeded
+	}
+	expected := `
+    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
+    # TYPE tsm_exporter_collect_error gauge
+    tsm_exporter_collect_error{collector="log"} 0
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="log"} 1
+	`
+	collector := NewLogExporter(&config.Target{}, log.NewNopLogger())
+	gatherers := setupGatherer(collector)
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 3 {
+		t.Errorf("Unexpected collection count %d, expected 3", val)
+	}
+	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
+		"tsm_active_log_free_bytes", "tsm_active_log_total_bytes", "tsm_active_log_used_bytes",
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		t.Errorf("unexpected collecting result:\n%s", err)
+	}
+}
+
+func TestDsmadmcLog(t *testing.T) {
 	execCommand = fakeExecCommand
 	mockedExitStatus = 0
 	mockedStdout = "foo"
@@ -110,4 +148,4 @@ func TestLogCollectorError(t *testing.T) {
 	if out != mockedStdout {
 		t.Errorf("Unexpected out: %s", out)
 	}
-}*/
+}

@@ -14,6 +14,7 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -68,9 +69,12 @@ func (c *EventsCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *EventsCollector) Collect(ch chan<- prometheus.Metric) {
 	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
+	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
-	if err != nil {
+	if err == context.DeadlineExceeded {
+		timeout = 1
+	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
 		errorMetric = 1
 	}
@@ -81,21 +85,24 @@ func (c *EventsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "events")
+	ch <- prometheus.MustNewConstMetric(collecTimeout, prometheus.GaugeValue, float64(timeout), "events")
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "events")
 }
 
 func (c *EventsCollector) collect() (map[string]EventMetric, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*eventsTimeout)*time.Second)
+	defer cancel()
 	var completedOut, notCompletedOut string
 	var completedErr, notCompletedErr error
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		completedOut, completedErr = DsmadmcEventsCompletedExec(c.target, c.logger)
+		completedOut, completedErr = DsmadmcEventsCompletedExec(c.target, ctx, c.logger)
 	}()
 	go func() {
 		defer wg.Done()
-		notCompletedOut, notCompletedErr = DsmadmcEventsNotCompletedExec(c.target, c.logger)
+		notCompletedOut, notCompletedErr = DsmadmcEventsNotCompletedExec(c.target, ctx, c.logger)
 	}()
 	wg.Wait()
 	if completedErr != nil {
@@ -117,8 +124,8 @@ func buildEventsCompletedQuery(target *config.Target) string {
 	return query
 }
 
-func dsmadmcEventsCompleted(target *config.Target, logger log.Logger) (string, error) {
-	out, err := dsmadmcQuery(target, buildEventsCompletedQuery(target), *eventsTimeout, logger)
+func dsmadmcEventsCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildEventsCompletedQuery(target), ctx, logger)
 	return out, err
 }
 
@@ -134,8 +141,8 @@ func buildEventsNotCompletedQuery(target *config.Target) string {
 	return query
 }
 
-func dsmadmcEventsNotCompleted(target *config.Target, logger log.Logger) (string, error) {
-	out, err := dsmadmcQuery(target, buildEventsNotCompletedQuery(target), *eventsTimeout, logger)
+func dsmadmcEventsNotCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildEventsNotCompletedQuery(target), ctx, logger)
 	return out, err
 }
 

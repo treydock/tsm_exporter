@@ -14,88 +14,46 @@
 package collector
 
 import (
-	"io/ioutil"
+	"context"
+	"fmt"
 	"os"
+	"os/exec"
+	"strconv"
 	"testing"
-	//"time"
+	"time"
 
 	"github.com/go-kit/kit/log"
-	//"github.com/google/goexpect"
 	"github.com/prometheus/client_golang/prometheus"
-	//"github.com/treydock/tsm_exporter/config"
-	//"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/treydock/tsm_exporter/config"
 )
 
-// TODO: Make these tests work
-/*func TestDsmadmcQuery(t *testing.T) {
-	if _, err := kingpin.CommandLine.Parse([]string{"--collector.dsmadmc.debug"}); err != nil {
-		t.Fatal(err)
-	}
-	output := []expect.Batcher{
-		&expect.BSnd{`Enter your password:`},
-		&expect.BSnd{`
+var (
+	mockedExitStatus = 0
+	mockedStdout     string
+	_, cancel        = context.WithTimeout(context.Background(), 5*time.Second)
+)
 
-Protect: SP01>`},
-		&expect.BSnd{`
-Protect: SP01>`},
-	}
-	exp, _, err := expect.SpawnFake(output, 2*time.Second)
-	defer exp.Close()
-	spawnExpectFunc = func(cmd string, timeout time.Duration) (*expect.GExpect, error) {
-		return exp, err
-	}
-	queryOutput = func(path string, query string, logger log.Logger) (string, error) {
-		return "some output", nil
-	}
-	w := log.NewSyncWriter(os.Stderr)
-	logger := log.NewLogfmtLogger(w)
-	out, err := dsmadmcQuery(&config.Target{}, "query", 2, logger)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if out != "some output" {
-		t.Errorf("Unexpected output: %s", out)
-	}
+func fakeExecCommand(ctx context.Context, command string, args ...string) *exec.Cmd {
+	cs := []string{"-test.run=TestExecCommandHelper", "--", command}
+	cs = append(cs, args...)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], cs...)
+	es := strconv.Itoa(mockedExitStatus)
+	cmd.Env = []string{"GO_WANT_HELPER_PROCESS=1",
+		"STDOUT=" + mockedStdout,
+		"EXIT_STATUS=" + es}
+	return cmd
 }
 
-func TestDsmadmcQueryError(t *testing.T) {
-	spawnExpectFunc = func(cmd string, timeout time.Duration) (*expect.GExpect, error) {
-		output := []expect.Batcher{
-			&expect.BSnd{`
-Failed to connect`},
-		}
-		exp, _, err := expect.SpawnFake(output, 2*time.Second)
-		return exp, err
+func TestExecCommandHelper(t *testing.T) {
+	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
+		return
 	}
-	queryOutput = func(path string, query string, logger log.Logger) (string, error) {
-		return "some output", nil
-	}
-	out, err := dsmadmcQuery(&config.Target{}, "query", 2, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if out != "some output" {
-		t.Errorf("Unexpected output. %s", out)
-	}
-}*/
 
-func TestGetQueryOutput(t *testing.T) {
-	tmp, _ := ioutil.TempFile("", "tsm_exporter_test")
-	defer os.Remove(tmp.Name())
-	data := []byte(`query
-returned,data
-quit
-`)
-	if _, err := tmp.Write(data); err != nil {
-		t.Errorf("Unexpected error writing to tmp file: %v", err)
-	}
-	out, err := getQueryOutput(tmp.Name(), "query", log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if out != "returned,data" {
-		t.Errorf("Unexpected output: %s", out)
-	}
+	//nolint:staticcheck
+	fmt.Fprintf(os.Stdout, os.Getenv("STDOUT"))
+	i, _ := strconv.Atoi(os.Getenv("EXIT_STATUS"))
+	os.Exit(i)
 }
 
 func setupGatherer(collector Collector) prometheus.Gatherer {
@@ -103,4 +61,32 @@ func setupGatherer(collector Collector) prometheus.Gatherer {
 	registry.MustRegister(collector)
 	gatherers := prometheus.Gatherers{registry}
 	return gatherers
+}
+
+func TestDsmadmcQueryWithError(t *testing.T) {
+	execCommand = fakeExecCommand
+	mockedExitStatus = 1
+	defer func() { execCommand = exec.CommandContext }()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := dsmadmcQuery(&config.Target{}, "query", ctx, log.NewNopLogger())
+	if err == nil {
+		t.Errorf("Expected error")
+	}
+}
+
+func TestDsmadmcQueryWithNoResultsError(t *testing.T) {
+	execCommand = fakeExecCommand
+	mockedExitStatus = 1
+	mockedStdout = "ANR2034E SELECT: No match found using this criteria.\nANS8001I Return code 11.\n"
+	defer func() { execCommand = exec.CommandContext }()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := dsmadmcQuery(&config.Target{}, "query", ctx, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err.Error())
+	}
+	if out != "" {
+		t.Errorf("Unexpected out: %s", out)
+	}
 }

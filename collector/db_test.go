@@ -14,10 +14,13 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -44,7 +47,7 @@ func TestDBCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcDBExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockedDBStdout, nil
 	}
 	expected := `
@@ -87,6 +90,9 @@ func TestDBCollector(t *testing.T) {
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="db"} 0
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="db"} 0
 	`
 	w := log.NewSyncWriter(os.Stderr)
 	logger := log.NewLogfmtLogger(w)
@@ -94,15 +100,15 @@ func TestDBCollector(t *testing.T) {
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 14 {
-		t.Errorf("Unexpected collection count %d, expected 14", val)
+	} else if val != 15 {
+		t.Errorf("Unexpected collection count %d, expected 15", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_db_space_total_bytes", "tsm_db_space_used_bytes", "tsm_db_space_free_bytes",
 		"tsm_db_pages_total", "tsm_db_pages_usable", "tsm_db_pages_used", "tsm_db_pages_free",
 		"tsm_db_buffer_hit_ratio", "tsm_db_buffer_requests_total", "tsm_db_sort_overflow", "tsm_db_pkg_hit_ratio",
 		"tsm_db_last_backup_timestamp_seconds",
-		"tsm_exporter_collect_error"); err != nil {
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
@@ -111,39 +117,70 @@ func TestDBCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcDBExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="db"} 1
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="db"} 0
 	`
 	collector := NewDBExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 2 {
-		t.Errorf("Unexpected collection count %d, expected 2", val)
+	} else if val != 3 {
+		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_db_space_total_bytes", "tsm_exporter_collect_error"); err != nil {
+		"tsm_db_space_total_bytes", "tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
 
-/*func TestDsmadmcDB(t *testing.T) {
+func TestDBCollectorTimeout(t *testing.T) {
+	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
+		t.Fatal(err)
+	}
+	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", context.DeadlineExceeded
+	}
+	expected := `
+    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
+    # TYPE tsm_exporter_collect_error gauge
+    tsm_exporter_collect_error{collector="db"} 0
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="db"} 1
+	`
+	collector := NewDBExporter(&config.Target{}, log.NewNopLogger())
+	gatherers := setupGatherer(collector)
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 3 {
+		t.Errorf("Unexpected collection count %d, expected 3", val)
+	}
+	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
+		"tsm_db_space_total_bytes", "tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		t.Errorf("unexpected collecting result:\n%s", err)
+	}
+}
+
+func TestDsmadmcDB(t *testing.T) {
 	execCommand = fakeExecCommand
 	mockedExitStatus = 0
 	mockedStdout = "foo"
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcDB(&config.Target{}, log.NewNopLogger())
+	out, err := dsmadmcDB(&config.Target{}, ctx, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
 	if out != mockedStdout {
 		t.Errorf("Unexpected out: %s", out)
 	}
-}*/
+}

@@ -14,6 +14,7 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -85,9 +86,12 @@ func (c *OccupancysCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *OccupancysCollector) Collect(ch chan<- prometheus.Metric) {
 	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
+	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
-	if err != nil {
+	if err == context.DeadlineExceeded {
+		timeout = 1
+	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
 		errorMetric = 1
 	}
@@ -99,11 +103,14 @@ func (c *OccupancysCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "occupancy")
+	ch <- prometheus.MustNewConstMetric(collecTimeout, prometheus.GaugeValue, float64(timeout), "occupancy")
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "occupancy")
 }
 
 func (c *OccupancysCollector) collect() ([]OccupancyMetric, error) {
-	out, err := DsmadmcOccupancysExec(c.target, c.logger)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*occupancyTimeout)*time.Second)
+	defer cancel()
+	out, err := DsmadmcOccupancysExec(c.target, ctx, c.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +118,7 @@ func (c *OccupancysCollector) collect() ([]OccupancyMetric, error) {
 	return metrics, nil
 }
 
-func dsmadmcOccupancys(target *config.Target, logger log.Logger) (string, error) {
+func dsmadmcOccupancys(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 	fields := getOccupancyFields()
 	var queryFields []string
 	var groupFields []string
@@ -126,7 +133,7 @@ func dsmadmcOccupancys(target *config.Target, logger log.Logger) (string, error)
 		queryFields = append(queryFields, field)
 	}
 	query := fmt.Sprintf("SELECT %s FROM occupancy GROUP BY %s", strings.Join(queryFields, ","), strings.Join(groupFields, ","))
-	out, err := dsmadmcQuery(target, query, *occupancyTimeout, logger)
+	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 

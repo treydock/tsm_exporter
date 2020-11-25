@@ -14,6 +14,7 @@
 package collector
 
 import (
+	"context"
 	"regexp"
 	"strings"
 	"time"
@@ -61,9 +62,12 @@ func (c *VolumeUsagesCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *VolumeUsagesCollector) Collect(ch chan<- prometheus.Metric) {
 	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
+	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
-	if err != nil {
+	if err == context.DeadlineExceeded {
+		timeout = 1
+	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
 		errorMetric = 1
 	}
@@ -75,11 +79,14 @@ func (c *VolumeUsagesCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "volumeusage")
+	ch <- prometheus.MustNewConstMetric(collecTimeout, prometheus.GaugeValue, float64(timeout), "volumeusage")
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "volumeusage")
 }
 
 func (c *VolumeUsagesCollector) collect() ([]VolumeUsageMetric, error) {
-	out, err := DsmadmcVolumeUsagesExec(c.target, c.logger)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*volumeusageTimeout)*time.Second)
+	defer cancel()
+	out, err := DsmadmcVolumeUsagesExec(c.target, ctx, c.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -87,9 +94,9 @@ func (c *VolumeUsagesCollector) collect() ([]VolumeUsageMetric, error) {
 	return metrics, nil
 }
 
-func dsmadmcVolumeUsages(target *config.Target, logger log.Logger) (string, error) {
+func dsmadmcVolumeUsages(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 	query := "SELECT NODE_NAME,VOLUME_NAME FROM volumeusage"
-	out, err := dsmadmcQuery(target, query, *volumeusageTimeout, logger)
+	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 
