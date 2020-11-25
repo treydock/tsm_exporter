@@ -29,14 +29,27 @@ import (
 
 var (
 	mockLibVolumeStdout = `
-LTO-5,Private,147
-LTO-5,Scratch,342
-LTO-6,Private,573
-LTO-6,Scratch,365
-LTO-7,Private,1082
-LTO-7,Scratch,153
+LTO-5,Private,LIB1,147
+LTO-5,Scratch,LIB1,342
+LTO-6,Private,LIB1,573
+LTO-6,Scratch,LIB1,365
+LTO-7,Private,LIB1,1082
+LTO-7,Scratch,LIB1,153
 `
 )
+
+func TestBuildLibVolumeQuery(t *testing.T) {
+	expectedQuery := "SELECT MEDIATYPE,STATUS,LIBRARY_NAME,COUNT(*) FROM libvolumes GROUP BY(MEDIATYPE,STATUS,LIBRARY_NAME)"
+	query := buildLibVolumesQuery(&config.Target{Name: "test"})
+	if query != expectedQuery {
+		t.Errorf("\nExpected: %s\nGot: %s", expectedQuery, query)
+	}
+	expectedQuery = "SELECT MEDIATYPE,STATUS,LIBRARY_NAME,COUNT(*) FROM libvolumes WHERE LIBRARY_NAME='LIB1' GROUP BY(MEDIATYPE,STATUS,LIBRARY_NAME)"
+	query = buildLibVolumesQuery(&config.Target{Name: "test", LibraryName: "LIB1"})
+	if query != expectedQuery {
+		t.Errorf("\nExpected: %s\nGot: %s", expectedQuery, query)
+	}
+}
 
 func TestLibVolumesParse(t *testing.T) {
 	metrics := libvolumesParse(mockLibVolumeStdout, log.NewNopLogger())
@@ -61,12 +74,12 @@ func TestLibVolumesCollector(t *testing.T) {
     tsm_exporter_collect_timeout{collector="libvolumes"} 0
 	# HELP tsm_libvolume_media Number of tapes
 	# TYPE tsm_libvolume_media gauge
-	tsm_libvolume_media{mediatype="LTO-5",status="private"} 147
-	tsm_libvolume_media{mediatype="LTO-5",status="scratch"} 342
-	tsm_libvolume_media{mediatype="LTO-6",status="private"} 573
-	tsm_libvolume_media{mediatype="LTO-6",status="scratch"} 365
-	tsm_libvolume_media{mediatype="LTO-7",status="private"} 1082
-	tsm_libvolume_media{mediatype="LTO-7",status="scratch"} 153
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-5",status="Private"} 147
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-5",status="Scratch"} 342
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-6",status="Private"} 573
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-6",status="Scratch"} 365
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-7",status="Private"} 1082
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-7",status="Scratch"} 153
 	`
 	collector := NewLibVolumesExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
@@ -134,7 +147,7 @@ func TestLibVolumesCollectorTimeout(t *testing.T) {
 		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_libvolume_scratch", "tsm_libvolume_media",
+		"tsm_libvolume_media",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
