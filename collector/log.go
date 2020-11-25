@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -135,7 +134,7 @@ func logParse(out string, logger log.Logger) LogMetric {
 			if f.Kind() == reflect.String {
 				f.SetString(values[i])
 			} else {
-				val, err := strconv.ParseFloat(values[i], 64)
+				val, err := parseFloat(values[i])
 				if err != nil {
 					level.Error(logger).Log("msg", fmt.Sprintf("Error parsing %s value %s: %s", k, values[i], err.Error()))
 					continue
