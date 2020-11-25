@@ -19,6 +19,10 @@
 * Rename tsm_replication_end_time to tsm_replication_end_timestamp_seconds
 * Rename tsm_replication_start_time to tsm_replication_start_timestamp_seconds
 
+### Changes
+
+* Add Docker container
+
 ## 0.6.0 / 2020-11-06
 
 * Update to Go 1.15 and update dependencies
