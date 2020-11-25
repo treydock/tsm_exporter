@@ -14,16 +14,16 @@
 package collector
 
 import (
+	"bytes"
+	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"regexp"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/google/goexpect"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -35,23 +35,22 @@ const (
 )
 
 var (
-	dsmLogDir             = kingpin.Flag("path.dsm_log.dir", "Directory to use for DSM_LOG environment variable").Default("/tmp").String()
-	dsmadmcTimeout        = kingpin.Flag("collector.dsmadmc.timeout", "Timeout of executing dsmadmc").Default("5").Int()
-	dsmadmcDebug          = kingpin.Flag("collector.dsmadmc.debug", "Debug executing of dsmadmc commands").Default("false").Bool()
-	dsmadmcPasswordPrompt = kingpin.Flag("collector.dsmadmc.password-prompt", "Regexp of password prompt").Default("password:").String()
-	dsmadmcPrompt         = kingpin.Flag("collector.dsmadmc.prompt", "Regexp of prompt for dsmadmc").Default("(?m)Protect:.+>").String()
-	spawnExpectFunc       = spawnExpect
-	timeNow               = time.Now
-	queryOutput           = getQueryOutput
-	collectorState        = make(map[string]bool)
-	factories             = make(map[string]func(target *config.Target, logger log.Logger) Collector)
-	collectDuration       = prometheus.NewDesc(
+	dsmLogDir       = kingpin.Flag("path.dsm_log.dir", "Directory to use for DSM_LOG environment variable").Default("/tmp").String()
+	execCommand     = exec.CommandContext
+	timeNow         = time.Now
+	collectorState  = make(map[string]bool)
+	factories       = make(map[string]func(target *config.Target, logger log.Logger) Collector)
+	collectDuration = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "exporter", "collector_duration_seconds"),
 		"Collector time duration.",
 		[]string{"collector"}, nil)
 	collectError = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "exporter", "collect_error"),
 		"Indicates if error has occurred during collection",
+		[]string{"collector"}, nil)
+	collecTimeout = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "exporter", "collect_timeout"),
+		"Indicates the collector timed out",
 		[]string{"collector"}, nil)
 )
 
@@ -105,87 +104,32 @@ func boolToFloat64(data bool) float64 {
 	}
 }
 
-func spawnExpect(cmd string, timeout time.Duration) (*expect.GExpect, error) {
-	opts := []expect.Option{
-		expect.NoCheck(),
-	}
-	if *dsmadmcDebug {
-		opts = append(opts, expect.Verbose(true))
-		opts = append(opts, expect.VerboseWriter(os.Stdout))
-	}
-	e, _, err := expect.Spawn(cmd, timeout, opts...)
-	return e, err
-}
-
-func dsmadmcQuery(target *config.Target, query string, queryTimeout int, logger log.Logger) (string, error) {
+func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logger log.Logger) (string, error) {
+	servername := fmt.Sprintf("-SERVERName=%s", target.Servername)
+	id := fmt.Sprintf("-ID=%s", target.Id)
+	password := fmt.Sprintf("-PAssword=%s", target.Password)
 	level.Debug(logger).Log("msg", "dsmadmc query", "query", query)
-	passwordRE := regexp.MustCompile(*dsmadmcPasswordPrompt)
-	promptRE := regexp.MustCompile(*dsmadmcPrompt)
-	timeout := time.Duration(*dsmadmcTimeout) * time.Second
-	tmp, err := ioutil.TempFile("", "tsm_exporter_out")
-	defer os.Remove(tmp.Name())
-	if err != nil {
-		level.Error(logger).Log("msg", "Error creating temporary output file", "err", err)
-		return "", err
-	}
-	cmd := fmt.Sprintf("dsmadmc -DATAONLY=YES -COMMAdelimited -SERVERName=%s -ID=%s -OUTfile=%s -Quiet", target.Servername, target.Id, tmp.Name())
+	cmd := execCommand(ctx, "dsmadmc", servername, id, password, "-DATAONLY=YES", "-COMMAdelimited", query)
 	os.Setenv("DSM_LOG", *dsmLogDir)
-	e, err := spawnExpectFunc(cmd, timeout)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
 	if err != nil {
-		level.Error(logger).Log("msg", "Error executing dsmadc", "err", err)
-		return "", err
+		if strings.Contains(stdout.String(), "No match found using this criteria") {
+			return "", nil
+		}
+		if ctx.Err() == context.DeadlineExceeded {
+			level.Error(logger).Log("msg", "Timeout executing dsmadmc")
+			return "", ctx.Err()
+		} else {
+			level.Error(logger).Log("msg", "Error executing dsmadc", "err", stderr.String(), "out", stdout.String())
+			return "", err
+		}
 	}
-	defer e.Close()
-
-	_, _, err = e.Expect(passwordRE, timeout)
-	if err != nil {
-		level.Error(logger).Log("msg", "Error gettig password prompt", "err", err)
-		return "", err
-	}
-	err = e.Send(target.Password + "\n")
-	if err != nil {
-		level.Error(logger).Log("msg", "Error sending password", "err", err)
-		return "", err
-	}
-	_, _, err = e.Expect(promptRE, timeout)
-	if err != nil {
-		level.Error(logger).Log("msg", "Error gettig prompt before query", "err", err)
-		return "", err
-	}
-	err = e.Send(query + "\n")
-	if err != nil {
-		level.Error(logger).Log("msg", "Error sending query", "err", err)
-		return "", err
-	}
-	_, _, err = e.Expect(promptRE, time.Duration(queryTimeout)*time.Second)
-	if err != nil {
-		level.Error(logger).Log("msg", "Error querying dsmadc", "err", err)
-		return "", err
-	}
-	err = e.Send("quit\n")
-	if err != nil {
-		level.Error(logger).Log("msg", "Error sending quit", "err", err)
-		return "", err
-	}
-	output, err := queryOutput(tmp.Name(), query, logger)
-	return output, err
-}
-
-func getQueryOutput(path string, query string, logger log.Logger) (string, error) {
-	content, err := ioutil.ReadFile(path)
-	if err != nil {
-		level.Error(logger).Log("msg", "Unable to read output file", "file", path, "err", err)
-		return "", err
-	}
-	result := string(content)
-	result = strings.Trim(result, query)
-	result = strings.Trim(result, "quit\n")
-	result = strings.TrimSpace(result)
-	if strings.Contains(result, "No match found using this criteria") {
-		return "", nil
-	}
-	level.Debug(logger).Log("msg", "query output", "result", result)
-	return result, nil
+	level.Debug(logger).Log("msg", "query output", "out", stdout.String())
+	return stdout.String(), nil
 }
 
 func buildInFilter(items []string) string {

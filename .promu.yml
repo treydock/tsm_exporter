@@ -25,3 +25,4 @@ crossbuild:
         - linux/ppc64
         - linux/ppc64le
         - linux/s390x
+        - aix/ppc64

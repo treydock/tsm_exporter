@@ -14,6 +14,7 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -90,9 +91,12 @@ func (c *ReplicationViewsCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
 	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
+	timeout := 0
 	errorMetric := 0
 	metrics, err := c.collect()
-	if err != nil {
+	if err == context.DeadlineExceeded {
+		timeout = 1
+	} else if err != nil {
 		level.Error(c.logger).Log("msg", err)
 		errorMetric = 1
 	}
@@ -107,21 +111,24 @@ func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "replicationview")
+	ch <- prometheus.MustNewConstMetric(collecTimeout, prometheus.GaugeValue, float64(timeout), "replicationview")
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "replicationview")
 }
 
 func (c *ReplicationViewsCollector) collect() (map[string]ReplicationViewMetric, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*replicationviewTimeout)*time.Second)
+	defer cancel()
 	var completedOut, notCompletedOut string
 	var completedErr, notCompletedErr error
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		completedOut, completedErr = DsmadmcReplicationViewsCompletedExec(c.target, c.logger)
+		completedOut, completedErr = DsmadmcReplicationViewsCompletedExec(c.target, ctx, c.logger)
 	}()
 	go func() {
 		defer wg.Done()
-		notCompletedOut, notCompletedErr = DsmadmcReplicationViewsNotCompletedExec(c.target, c.logger)
+		notCompletedOut, notCompletedErr = DsmadmcReplicationViewsNotCompletedExec(c.target, ctx, c.logger)
 	}()
 	wg.Wait()
 	if completedErr != nil {
@@ -143,8 +150,8 @@ func buildReplicationViewCompletedQuery(target *config.Target) string {
 	return query
 }
 
-func dsmadmcReplicationViewsCompleted(target *config.Target, logger log.Logger) (string, error) {
-	out, err := dsmadmcQuery(target, buildReplicationViewCompletedQuery(target), *replicationviewTimeout, logger)
+func dsmadmcReplicationViewsCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildReplicationViewCompletedQuery(target), ctx, logger)
 	return out, err
 }
 
@@ -160,8 +167,8 @@ func buildReplicationViewNotCompletedQuery(target *config.Target) string {
 	return query
 }
 
-func dsmadmcReplicationViewsNotCompleted(target *config.Target, logger log.Logger) (string, error) {
-	out, err := dsmadmcQuery(target, buildReplicationViewNotCompletedQuery(target), *replicationviewTimeout, logger)
+func dsmadmcReplicationViewsNotCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildReplicationViewNotCompletedQuery(target), ctx, logger)
 	return out, err
 }
 

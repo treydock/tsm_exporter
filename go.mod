@@ -4,10 +4,8 @@ go 1.13
 
 require (
 	github.com/go-kit/kit v0.10.0
-	github.com/google/goexpect v0.0.0-20200816234442-b5b77125c2c5
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/common v0.14.0
-	github.com/stretchr/testify v1.6.1 // indirect
 	golang.org/x/sys v0.0.0-20201106081118-db71ae66460a // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6

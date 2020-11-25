@@ -14,9 +14,12 @@
 package collector
 
 import (
+	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -54,7 +57,7 @@ func TestStatusCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcStatusExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockStatusStdout, nil
 	}
 	expected := `
@@ -71,7 +74,7 @@ func TestStatusCollector(t *testing.T) {
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_status",
-		"tsm_exporter_collect_error"); err != nil {
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
@@ -80,7 +83,7 @@ func TestStatusCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcStatusExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -97,12 +100,38 @@ func TestStatusCollectorError(t *testing.T) {
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_status",
-		"tsm_exporter_collect_error"); err != nil {
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
 
-/*func TestDsmadmcStatus(t *testing.T) {
+func TestStatusCollectorTimeout(t *testing.T) {
+	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
+		t.Fatal(err)
+	}
+	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", context.DeadlineExceeded
+	}
+	expected := `
+    # HELP tsm_status Status of TSM, 1=online 0=failure
+    # TYPE tsm_status gauge
+    tsm_status 0
+	`
+	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger())
+	gatherers := setupGatherer(collector)
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 2 {
+		t.Errorf("Unexpected collection count %d, expected 2", val)
+	}
+	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
+		"tsm_status",
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		t.Errorf("unexpected collecting result:\n%s", err)
+	}
+}
+
+func TestDsmadmcStatus(t *testing.T) {
 	execCommand = fakeExecCommand
 	mockedExitStatus = 0
 	mockedStdout = "foo"
@@ -116,4 +145,4 @@ func TestStatusCollectorError(t *testing.T) {
 	if out != mockedStdout {
 		t.Errorf("Unexpected out: %s", out)
 	}
-}*/
+}

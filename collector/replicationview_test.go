@@ -14,7 +14,9 @@
 package collector
 
 import (
+	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -90,16 +92,19 @@ func TestReplicationViewsCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcReplicationViewsCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcReplicationViewsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockReplicationViewCompletedStdout, nil
 	}
-	DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockReplicationViewNotCompletedStdout, nil
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="replicationview"} 0
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="replicationview"} 0
 	# HELP tsm_replication_duration_seconds Amount of time taken to complete the most recent replication
 	# TYPE tsm_replication_duration_seconds gauge
 	tsm_replication_duration_seconds{fsname="/TEST2CONF",nodename="TEST2DB2"} 19276
@@ -141,14 +146,14 @@ func TestReplicationViewsCollector(t *testing.T) {
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 26 {
-		t.Errorf("Unexpected collection count %d, expected 26", val)
+	} else if val != 27 {
+		t.Errorf("Unexpected collection count %d, expected 27", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
 		"tsm_replication_replicated_bytes", "tsm_replication_replicated_files",
 		"tsm_replication_start_timestamp_seconds", "tsm_replication_end_timestamp_seconds",
-		"tsm_exporter_collect_error"); err != nil {
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
@@ -157,33 +162,69 @@ func TestReplicationViewsCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcReplicationViewsCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcReplicationViewsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, logger log.Logger) (string, error) {
+	DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="replicationview"} 1
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="replicationview"} 0
 	`
 	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 2 {
-		t.Errorf("Unexpected collection count %d, expected 2", val)
+	} else if val != 3 {
+		t.Errorf("Unexpected collection count %d, expected 3", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
 		"tsm_replication_replicated_bytes", "tsm_replication_replicated_files",
-		"tsm_exporter_collect_error"); err != nil {
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
 
-/*func TestDsmadmcReplicationViewsCompleted(t *testing.T) {
+func TestReplicationViewsCollectorTimeout(t *testing.T) {
+	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
+		t.Fatal(err)
+	}
+	DsmadmcReplicationViewsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", context.DeadlineExceeded
+	}
+	DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", context.DeadlineExceeded
+	}
+	expected := `
+    # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
+    # TYPE tsm_exporter_collect_error gauge
+    tsm_exporter_collect_error{collector="replicationview"} 0
+    # HELP tsm_exporter_collect_timeout Indicates the collector timed out
+    # TYPE tsm_exporter_collect_timeout gauge
+    tsm_exporter_collect_timeout{collector="replicationview"} 1
+	`
+	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger())
+	gatherers := setupGatherer(collector)
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 3 {
+		t.Errorf("Unexpected collection count %d, expected 3", val)
+	}
+	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
+		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
+		"tsm_replication_replicated_bytes", "tsm_replication_replicated_files",
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		t.Errorf("unexpected collecting result:\n%s", err)
+	}
+}
+
+func TestDsmadmcReplicationViewsCompleted(t *testing.T) {
 	execCommand = fakeExecCommand
 	mockedExitStatus = 0
 	mockedStdout = "foo"
@@ -213,4 +254,4 @@ func TestDsmadmcReplicationViewsNotCompleted(t *testing.T) {
 	if out != mockedStdout {
 		t.Errorf("Unexpected out: %s", out)
 	}
-}*/
+}
