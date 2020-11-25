@@ -8,7 +8,7 @@
 * For volume metrics, replace name label with volume
 * Improve events collector to not require saving any data in memory, remove --collector.events.duration-cache flag
 * Improve replicationview collector to not store any data in memory, remove --collector.replicationview.metric-cache flag
-* Remove tsm_libvolume_scratch metric, use sum(tsm_libvolume_media{status="scratch"}) instead
+* Remove tsm_libvolume_scratch metric, use sum(tsm_libvolume_media{status="Scratch"}) instead
 * Make percent metrics into ratios
   * Rename tsm_storage_pool_utilized_percent to tsm_storage_pool_utilized_ratio
   * Rename tsm_volume_utilized_percent to tsm_volume_utilized_ratio
@@ -18,10 +18,13 @@
 * Rename tsm_db_last_backup_time to tsm_db_last_backup_timestamp_seconds
 * Rename tsm_replication_end_time to tsm_replication_end_timestamp_seconds
 * Rename tsm_replication_start_time to tsm_replication_start_timestamp_seconds
+* No longer change `tsm_libvolume_media` label `status` to be lower case, use raw value from TSM like `Private` and `Scratch`
 
 ### Changes
 
 * Add Docker container
+* Fix libvolume query
+* Add `library` label to `tsm_libvolume_media` metric
 
 ## 0.6.0 / 2020-11-06
 

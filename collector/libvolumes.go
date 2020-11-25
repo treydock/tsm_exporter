@@ -35,6 +35,7 @@ var (
 type LibVolumeMetric struct {
 	mediatype string
 	status    string
+	library   string
 	count     float64
 }
 
@@ -51,7 +52,7 @@ func init() {
 func NewLibVolumesExporter(target *config.Target, logger log.Logger) Collector {
 	return &LibVolumesCollector{
 		media: prometheus.NewDesc(prometheus.BuildFQName(namespace, "libvolume", "media"),
-			"Number of tapes", []string{"mediatype", "status"}, nil),
+			"Number of tapes", []string{"mediatype", "library", "status"}, nil),
 		target: target,
 		logger: logger,
 	}
@@ -75,7 +76,7 @@ func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, m := range metrics {
-		ch <- prometheus.MustNewConstMetric(c.media, prometheus.GaugeValue, m.count, m.mediatype, m.status)
+		ch <- prometheus.MustNewConstMetric(c.media, prometheus.GaugeValue, m.count, m.mediatype, m.library, m.status)
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "libvolumes")
@@ -94,12 +95,17 @@ func (c *LibVolumesCollector) collect() ([]LibVolumeMetric, error) {
 	return metrics, nil
 }
 
-func dsmadmcLibVolumes(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	query := "SELECT MEDIATYPE,STATUS,COUNT(*) FROM libvolumes GROUP BY(MEDIATYPE,STATUS)"
+func buildLibVolumesQuery(target *config.Target) string {
+	query := "SELECT MEDIATYPE,STATUS,LIBRARY_NAME,COUNT(*) FROM libvolumes"
 	if target.LibraryName != "" {
-		query = query + fmt.Sprintf(" AND library_name='%s'", target.LibraryName)
+		query = query + fmt.Sprintf(" WHERE LIBRARY_NAME='%s'", target.LibraryName)
 	}
-	out, err := dsmadmcQuery(target, query, ctx, logger)
+	query = query + " GROUP BY(MEDIATYPE,STATUS,LIBRARY_NAME)"
+	return query
+}
+
+func dsmadmcLibVolumes(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildLibVolumesQuery(target), ctx, logger)
 	return out, err
 }
 
@@ -109,15 +115,16 @@ func libvolumesParse(out string, logger log.Logger) []LibVolumeMetric {
 	for _, line := range lines {
 		l := strings.TrimSpace(line)
 		items := strings.Split(l, ",")
-		if len(items) != 3 {
+		if len(items) != 4 {
 			continue
 		}
 		var metric LibVolumeMetric
 		metric.mediatype = items[0]
-		metric.status = strings.ToLower(items[1])
-		count, err := strconv.ParseFloat(items[2], 64)
+		metric.status = items[1]
+		metric.library = items[2]
+		count, err := strconv.ParseFloat(items[3], 64)
 		if err != nil {
-			level.Error(logger).Log("msg", fmt.Sprintf("Error parsing libvolume value '%s': %s", items[2], err.Error()))
+			level.Error(logger).Log("msg", fmt.Sprintf("Error parsing libvolume value '%s': %s", items[3], err.Error()))
 			continue
 		}
 		metric.count = count
