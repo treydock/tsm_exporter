@@ -16,6 +16,8 @@ The `/tsm` metrics endpoint exposes TSM metrics and requires the `target` parame
 
 The `/metrics` endpoint exposes Go and process metrics for this exporter.
 
+This exporter has been tested with TSM 8.1.2.
+
 ## Collectors
 
 Collectors are enabled or disabled via a config file.
@@ -90,6 +92,26 @@ The example above will map volumes starting with `E` to be counted as `LTO6` and
 This exporter relies on the `dsmadmc` command. The host running the exporter is expected to have both the `dsmadmc` executable and files `/opt/tivoli/tsm/client/ba/bin/dsm.sys` and `/opt/tivoli/tsm/client/ba/bin/dsm.opt`.
 
 The hosts being queried by this exporter must exist in `/opt/tivoli/tsm/client/ba/bin/dsm.sys`.
+
+To validate your system is able to properly query TSM servers (substitute environment variables for real values):
+
+```
+/opt/tivoli/tsm/client/ba/bin/dsmadmc -servername=$SERVERNAME -id=$USERNAME -password=$PASSWORD "QUERY STATUS"
+```
+
+This has been validated on a host with `TIVsm-BA` and `TIVsm-API64` RPMs installed.
+
+## Docker
+
+Example of running the Docker container. This relies on the [Dependencies](#dependencies) being installed on the host running Docker.
+
+```
+docker run -d -p 9310:9310 --name tsm_exporter \
+-v "tsm_exporter.yaml:/tsm_exporter.yaml:ro" \
+-v "/opt/tivoli:/opt/tivoli:ro" \
+-v "/usr/local/ibm:/usr/local/ibm:ro" \
+treydock/tsm_exporter
+```
 
 ## Install
 
