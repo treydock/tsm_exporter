@@ -52,9 +52,26 @@ func TestBuildLibVolumeQuery(t *testing.T) {
 }
 
 func TestLibVolumesParse(t *testing.T) {
-	metrics := libvolumesParse(mockLibVolumeStdout, log.NewNopLogger())
+	metrics, err := libvolumesParse(mockLibVolumeStdout, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if len(metrics) != 6 {
 		t.Errorf("Expected 6 metrics, got %v", len(metrics))
+	}
+}
+
+func TestLibVolumesParseErrors(t *testing.T) {
+	tests := []string{
+		"LTO-5,Private,LIB1,foo\n",
+		"LTO-5,\"Private\"\",LIB1,147",
+	}
+	for i, out := range tests {
+		_, err := libvolumesParse(out, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error in test case %d", i)
+		}
 	}
 }
 

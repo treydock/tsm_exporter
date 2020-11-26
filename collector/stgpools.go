@@ -100,8 +100,8 @@ func (c *StoragePoolCollector) collect() ([]StoragePoolMetric, error) {
 	if err != nil {
 		return nil, err
 	}
-	metrics := stgpoolsParse(out, c.logger)
-	return metrics, nil
+	metrics, err := stgpoolsParse(out, c.logger)
+	return metrics, err
 }
 
 func dsmadmcStoragePool(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
@@ -111,13 +111,15 @@ func dsmadmcStoragePool(target *config.Target, ctx context.Context, logger log.L
 	return out, err
 }
 
-func stgpoolsParse(out string, logger log.Logger) []StoragePoolMetric {
+func stgpoolsParse(out string, logger log.Logger) ([]StoragePoolMetric, error) {
 	var metrics []StoragePoolMetric
 	fields := getStoragePoolFields()
-	lines := strings.Split(out, "\n")
-	for _, l := range lines {
-		values := strings.Split(strings.TrimSpace(l), ",")
-		if len(values) != len(fields) {
+	records, err := getRecords(out, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != len(fields) {
 			continue
 		}
 		var metric StoragePoolMetric
@@ -127,16 +129,14 @@ func stgpoolsParse(out string, logger log.Logger) []StoragePoolMetric {
 			field := stgpoolsMap[k]
 			f := s.FieldByName(field)
 			if f.Kind() == reflect.String {
-				f.SetString(values[i])
+				f.SetString(record[i])
 			} else {
-				val, err := parseFloat(values[i])
+				val, err := parseFloat(record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", fmt.Sprintf("Error parsing %s value %s: %s", k, values[i], err.Error()))
-					continue
+					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "err", err)
+					return nil, err
 				}
-				if strings.HasSuffix(k, "_MB") {
-					val = val * 1024 * 1024
-				} else if strings.Contains(field, "Percent") {
+				if strings.Contains(field, "Percent") {
 					val = val / 100
 				}
 				f.SetFloat(val)
@@ -144,7 +144,7 @@ func stgpoolsParse(out string, logger log.Logger) []StoragePoolMetric {
 		}
 		metrics = append(metrics, metric)
 	}
-	return metrics
+	return metrics, nil
 }
 
 func getStoragePoolFields() []string {

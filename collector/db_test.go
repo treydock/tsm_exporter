@@ -29,17 +29,63 @@ import (
 )
 
 var (
-	mockedDBStdout = "88.6,TSMDB1,3092796,1453663,2020-05-22 08:10:00.000000,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n"
+	mockedDBStdout = `
+Data,to,ignore
+88.6,TSMDB1,3092796,1453663,2020-05-22 08:10:00.000000,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296
+`
+	// https://github.com/treydock/tsm_exporter/issues/26#issuecomment-734353727
+	mockedDBStdoutComma = `
+"99,8",TSMDB1,14716,52426,2020-11-26 06:55:13.000000,"99,5",0,104779659176,11102498,221184,11095514,168693,11080798
+`
 )
 
 func TestDBParse(t *testing.T) {
-	metrics := dbParse(mockedDBStdout, log.NewNopLogger())
+	metrics, err := dbParse(mockedDBStdout, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if len(metrics) != 1 {
 		t.Errorf("Expected 1 metrics, got %v", len(metrics))
 		return
 	}
 	if val := metrics[0].Name; val != "TSMDB1" {
 		t.Errorf("Unexpected name, got %v", val)
+	}
+	if val := metrics[0].BuffHitRatio; fmt.Sprintf("%.3f", val) != "0.886" {
+		t.Errorf("Unexpected BuffHitRatio, got %v", val)
+	}
+}
+
+func TestDBParseCommas(t *testing.T) {
+	metrics, err := dbParse(mockedDBStdoutComma, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
+	if len(metrics) != 1 {
+		t.Errorf("Expected 1 metrics, got %v", len(metrics))
+		return
+	}
+	if val := metrics[0].Name; val != "TSMDB1" {
+		t.Errorf("Unexpected name, got %v", val)
+	}
+	if val := metrics[0].BuffHitRatio; fmt.Sprintf("%.3f", val) != "0.998" {
+		t.Errorf("Unexpected BuffHitRatio, got %v", val)
+	}
+}
+
+func TestDBParseErrors(t *testing.T) {
+	tests := []string{
+		"foo,TSMDB1,3092796,1453663,2020-05-22 08:10:00.000000,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n",
+		"88.6,TSMDB1,3092796,1453663,foo,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n",
+		"\"88.6\"\",TSMDB1,3092796,1453663,foo,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n",
+	}
+	for i, out := range tests {
+		_, err := dbParse(out, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error in test case %d", i)
+		}
 	}
 }
 

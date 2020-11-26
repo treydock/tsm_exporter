@@ -29,6 +29,7 @@ import (
 
 var (
 	mockDriveStdout = `
+Data,to,ignore
 LIB1,TAPE10,YES,LOADED,FOO1
 LIB1,TAPE11,YES,LOADED,FOO2
 LIBENC,TAPE00,YES,EMPTY,
@@ -36,13 +37,42 @@ LIBENC,TAPE01,NO,EMPTY,
 `
 )
 
+func TestBuildDrivesQuery(t *testing.T) {
+	expectedQuery := "SELECT library_name,drive_name,online,drive_state,volume_name FROM drives"
+	query := buildDrivesQuery(&config.Target{Name: "test"})
+	if query != expectedQuery {
+		t.Errorf("\nExpected: %s\nGot: %s", expectedQuery, query)
+	}
+	expectedQuery = "SELECT library_name,drive_name,online,drive_state,volume_name FROM drives WHERE library_name='LIB1'"
+	query = buildDrivesQuery(&config.Target{Name: "test", LibraryName: "LIB1"})
+	if query != expectedQuery {
+		t.Errorf("\nExpected: %s\nGot: %s", expectedQuery, query)
+	}
+}
+
 func TestDrivesParse(t *testing.T) {
-	metrics := drivesParse(mockDriveStdout, log.NewNopLogger())
+	metrics, err := drivesParse(mockDriveStdout, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if len(metrics) != 4 {
 		t.Errorf("Expected 4 metrics, got %d", len(metrics))
 	}
 	if metrics[0].online != true {
 		t.Errorf("Expected online, got %v", metrics[0].online)
+	}
+}
+
+func TestDrivesParseErrors(t *testing.T) {
+	tests := []string{
+		"\"LIB1\"\",TAPE10,YES,LOADED,FOO1",
+	}
+	for i, out := range tests {
+		_, err := drivesParse(out, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error in test case %d", i)
+		}
 	}
 }
 

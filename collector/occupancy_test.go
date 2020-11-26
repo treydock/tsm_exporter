@@ -30,15 +30,54 @@ import (
 var (
 	// query: SELECT FILESPACE_NAME,LOGICAL_MB,NODE_NAME,NUM_FILES,PHYSICAL_MB,STGPOOL_NAME FROM occupancy
 	mockOccupancyStdout = `
+Data,to,ignore
 /home,59.94,NETAPPUSER,3,59.94,PFNETAPP
 /fs/project,1805773220.21,PROJECT,316487756,1806568784.42,PTGPFS
+`
+	mockOccupancyStdoutComma = `
+/home,"59,94",NETAPPUSER,3,"59,94",PFNETAPP
+/fs/project,"1805773220,21",PROJECT,316487756,"1806568784,42",PTGPFS
 `
 )
 
 func TestOccupancysParse(t *testing.T) {
-	metrics := occupancyParse(mockOccupancyStdout, log.NewNopLogger())
+	metrics, err := occupancyParse(mockOccupancyStdout, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %v", len(metrics))
+	}
+	if val := metrics[0].Logical; val != 62851645.44 {
+		t.Errorf("Unexpected value for Logical, got: %v", val)
+	}
+}
+
+func TestOccupancysParseComma(t *testing.T) {
+	metrics, err := occupancyParse(mockOccupancyStdoutComma, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
+	if len(metrics) != 2 {
+		t.Errorf("Expected 2 metrics, got %v", len(metrics))
+	}
+	if val := metrics[0].Logical; val != 62851645.44 {
+		t.Errorf("Unexpected value for Logical, got: %v", val)
+	}
+}
+
+func TestOccupancysParseErrors(t *testing.T) {
+	tests := []string{
+		"/home,foo,NETAPPUSER,3,59.94,PFNETAPP\n",
+		"/home,\"59\",94\",NETAPPUSER,3,\"59,94\",PFNETAPP",
+	}
+	for i, out := range tests {
+		_, err := occupancyParse(out, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error in test case %d", i)
+		}
 	}
 }
 

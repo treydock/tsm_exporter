@@ -31,20 +31,64 @@ import (
 var (
 	// QUERY: SELECT DEVCLASS,PCT_UTILIZED,POOLTYPE,STGPOOL_NAME,STG_TYPE FROM stgpools
 	mockedStoragePoolStdout = `
+Data,to,ignore
 DISK,0.0,PRIMARY,ARCHIVEPOOL,DEVCLASS
 DCFILEE,41.8,PRIMARY,EPFESS,DEVCLASS
 DCULT7,42.6,PRIMARY,PTGPFS,DEVCLASS
 `
+	mockedStoragePoolStdoutComma = `
+DISK,"0,0",PRIMARY,ARCHIVEPOOL,DEVCLASS
+DCFILEE,"41,8",PRIMARY,EPFESS,DEVCLASS
+DCULT7,"42,6",PRIMARY,PTGPFS,DEVCLASS
+`
 )
 
 func TestStoragePoolParse(t *testing.T) {
-	metrics := stgpoolsParse(mockedStoragePoolStdout, log.NewNopLogger())
+	metrics, err := stgpoolsParse(mockedStoragePoolStdout, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if len(metrics) != 3 {
 		t.Errorf("Expected 3 metrics, got %v", len(metrics))
 		return
 	}
 	if val := metrics[0].Name; val != "ARCHIVEPOOL" {
 		t.Errorf("Unexpected name, got %v", val)
+	}
+	if val := metrics[1].PercentUtilized; val != 0.418 {
+		t.Errorf("Unexpected PercentUtilized, got %v", val)
+	}
+}
+
+func TestStoragePoolParseComma(t *testing.T) {
+	metrics, err := stgpoolsParse(mockedStoragePoolStdoutComma, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
+	if len(metrics) != 3 {
+		t.Errorf("Expected 3 metrics, got %v", len(metrics))
+		return
+	}
+	if val := metrics[0].Name; val != "ARCHIVEPOOL" {
+		t.Errorf("Unexpected name, got %v", val)
+	}
+	if val := metrics[1].PercentUtilized; val != 0.418 {
+		t.Errorf("Unexpected PercentUtilized, got %v", val)
+	}
+}
+
+func TestStoragePoolParseErrors(t *testing.T) {
+	tests := []string{
+		"DISK,foo,PRIMARY,ARCHIVEPOOL,DEVCLASS\n",
+		"DISK,0.0,\"PRIMARY,ARCHIVEPOOL,DEVCLASS",
+	}
+	for i, out := range tests {
+		_, err := stgpoolsParse(out, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error in test case %d", i)
+		}
 	}
 }
 

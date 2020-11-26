@@ -30,11 +30,13 @@ import (
 
 var (
 	mockEventCompletedStdout = `
+Ignore
 FOO,2020-03-22 05:09:43.000000,2020-03-22 05:41:14.000000
 FOO,2020-03-21 05:09:43.000000,2020-03-21 05:39:14.000000
 FOO,2020-03-20 05:09:43.000000,2020-03-20 05:40:14.000000
 `
 	mockEventNotCompletedStdout = `
+Ignore
 FOO,Future
 BAR,Not Started
 BAR,Not Started
@@ -72,7 +74,11 @@ func TestBuildEventsNotCompletedQuery(t *testing.T) {
 }
 
 func TestEventsParse(t *testing.T) {
-	metrics := eventsParse(mockEventCompletedStdout, mockEventNotCompletedStdout, log.NewNopLogger())
+	metrics, err := eventsParse(mockEventCompletedStdout, mockEventNotCompletedStdout, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %d", len(metrics))
 		return
@@ -85,6 +91,29 @@ func TestEventsParse(t *testing.T) {
 	}
 	if val := metrics["BAR"].notCompleted; val != 2 {
 		t.Errorf("Expected 1 notCompleted, got %v", val)
+	}
+}
+
+func TestEventsParseErrors(t *testing.T) {
+	tests := []string{
+		"FOO,error,2020-03-22 05:41:14.000000",
+		"FOO,2020-03-22 05:09:43.000000,error",
+		"\"FOO,2020-03-20 \"05:09:43.000000\",2020-03-20 05:40:14.000000",
+	}
+	for i, out := range tests {
+		_, err := eventsParse(out, mockEventNotCompletedStdout, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error on test case %d", i)
+		}
+	}
+	tests = []string{
+		"FOO,\"Future\"\"",
+	}
+	for i, out := range tests {
+		_, err := eventsParse(mockEventCompletedStdout, out, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error on test case %d", i)
+		}
 	}
 }
 
@@ -138,7 +167,7 @@ func TestEventsCollectorError(t *testing.T) {
 		return "", fmt.Errorf("Error")
 	}
 	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", fmt.Errorf("Error")
+		return mockEventNotCompletedStdout, nil
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
@@ -150,6 +179,22 @@ func TestEventsCollectorError(t *testing.T) {
 	`
 	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 3 {
+		t.Errorf("Unexpected collection count %d, expected 3", val)
+	}
+	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
+		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds",
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		t.Errorf("unexpected collecting result:\n%s", err)
+	}
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockEventCompletedStdout, nil
+	}
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", fmt.Errorf("Error")
+	}
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	} else if val != 3 {

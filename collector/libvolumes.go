@@ -16,7 +16,6 @@ package collector
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -90,8 +89,8 @@ func (c *LibVolumesCollector) collect() ([]LibVolumeMetric, error) {
 	if err != nil {
 		return nil, err
 	}
-	metrics := libvolumesParse(out, c.logger)
-	return metrics, nil
+	metrics, err := libvolumesParse(out, c.logger)
+	return metrics, err
 }
 
 func buildLibVolumesQuery(target *config.Target) string {
@@ -108,26 +107,27 @@ func dsmadmcLibVolumes(target *config.Target, ctx context.Context, logger log.Lo
 	return out, err
 }
 
-func libvolumesParse(out string, logger log.Logger) []LibVolumeMetric {
+func libvolumesParse(out string, logger log.Logger) ([]LibVolumeMetric, error) {
 	var metrics []LibVolumeMetric
-	lines := strings.Split(out, "\n")
-	for _, line := range lines {
-		l := strings.TrimSpace(line)
-		items := strings.Split(l, ",")
-		if len(items) != 4 {
+	records, err := getRecords(out, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != 4 {
 			continue
 		}
 		var metric LibVolumeMetric
-		metric.mediatype = items[0]
-		metric.status = items[1]
-		metric.library = items[2]
-		count, err := parseFloat(items[3])
+		metric.mediatype = record[0]
+		metric.status = record[1]
+		metric.library = record[2]
+		count, err := parseFloat(record[3])
 		if err != nil {
-			level.Error(logger).Log("msg", fmt.Sprintf("Error parsing libvolume value '%s': %s", items[3], err.Error()))
-			continue
+			level.Error(logger).Log("msg", "Error parsing libvolume value", "value", record[3], "err", err)
+			return nil, err
 		}
 		metric.count = count
 		metrics = append(metrics, metric)
 	}
-	return metrics
+	return metrics, nil
 }

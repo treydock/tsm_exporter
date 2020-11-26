@@ -16,6 +16,7 @@ package collector
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"fmt"
 	"os"
 	"os/exec"
@@ -151,4 +152,16 @@ func buildInFilter(items []string) string {
 		values = append(values, fmt.Sprintf("'%s'", s))
 	}
 	return strings.Join(values, ",")
+}
+
+func getRecords(out string, logger log.Logger) ([][]string, error) {
+	data := strings.NewReader(out)
+	r := csv.NewReader(data)
+	r.FieldsPerRecord = -1
+	records, err := r.ReadAll()
+	if err != nil {
+		level.Error(logger).Log("msg", "Error reading CSV output", "err", err)
+		return nil, err
+	}
+	return records, nil
 }

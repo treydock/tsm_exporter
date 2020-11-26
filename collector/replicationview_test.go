@@ -29,10 +29,13 @@ import (
 
 var (
 	mockReplicationViewCompletedStdout = `
+Data,to,ignore
 TEST2DB2,/TEST2CONF,2020-03-23 00:45:29.000000,2020-03-23 06:06:45.000000,2,167543418
+TEST2DB2,/TEST2CONF,2020-03-22 00:43:29.000000,2020-03-22 06:06:45.000000,2,167543418
 TEST2DB2,/TEST4,2020-03-23 00:45:29.000000,2020-03-23 06:06:45.000000,2,1052637876956
 `
 	mockReplicationViewNotCompletedStdout = `
+Ignore
 FOO,/BAR
 BAR,/BAZ
 `
@@ -69,7 +72,11 @@ func TestBuildReplicationViewNotCompletedQuery(t *testing.T) {
 }
 
 func TestReplicationViewsParse(t *testing.T) {
-	metrics := replicationviewParse(mockReplicationViewCompletedStdout, mockReplicationViewNotCompletedStdout, log.NewNopLogger())
+	metrics, err := replicationviewParse(mockReplicationViewCompletedStdout, mockReplicationViewNotCompletedStdout, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if len(metrics) != 4 {
 		t.Errorf("Expected 4 metrics, got %d", len(metrics))
 		return
@@ -85,6 +92,31 @@ func TestReplicationViewsParse(t *testing.T) {
 	}
 	if val := metrics["BAR-/BAZ"].NotCompleted; val != 1 {
 		t.Errorf("Expected 1 notCompleted, got %v", val)
+	}
+}
+
+func TestReplicationViewsParseErrors(t *testing.T) {
+	tests := []string{
+		"TEST2DB2,/TEST2CONF,FOO,2020-03-23 06:06:45.000000,2,167543418\n",
+		"TEST2DB2,/TEST2CONF,2020-03-23 00:45:29.000000,FOO,2,167543418\n",
+		"TEST2DB2,/TEST2CONF,2020-03-23 00:45:29.000000,2020-03-23 06:06:45.000000,FOO,167543418\n",
+		"TEST2DB2,/TEST2CONF,2020-03-23 00:45:29.000000,2020-03-23 06:06:45.000000,2,FOO\n",
+		"TEST2DB2,/TEST2CONF,\"2020-03-23\" 00:45:29.000000\",2020-03-23 06:06:45.000000,2,167543418",
+	}
+	for i, out := range tests {
+		_, err := replicationviewParse(out, mockReplicationViewNotCompletedStdout, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error on test case %d", i)
+		}
+	}
+	tests = []string{
+		"FOO,\"\"/BAR\"",
+	}
+	for i, out := range tests {
+		_, err := replicationviewParse(mockReplicationViewCompletedStdout, out, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error on test case %d", i)
+		}
 	}
 }
 
@@ -166,7 +198,7 @@ func TestReplicationViewsCollectorError(t *testing.T) {
 		return "", fmt.Errorf("Error")
 	}
 	DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return "", fmt.Errorf("Error")
+		return mockReplicationViewNotCompletedStdout, nil
 	}
 	expected := `
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
@@ -178,6 +210,23 @@ func TestReplicationViewsCollectorError(t *testing.T) {
 	`
 	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
+	if val, err := testutil.GatherAndCount(gatherers); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if val != 3 {
+		t.Errorf("Unexpected collection count %d, expected 3", val)
+	}
+	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
+		"tsm_replication_duration_seconds", "tsm_replication_not_completed",
+		"tsm_replication_replicated_bytes", "tsm_replication_replicated_files",
+		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
+		t.Errorf("unexpected collecting result:\n%s", err)
+	}
+	DsmadmcReplicationViewsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockReplicationViewCompletedStdout, nil
+	}
+	DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return "", fmt.Errorf("Error")
+	}
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	} else if val != 3 {

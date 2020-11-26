@@ -16,7 +16,6 @@ package collector
 import (
 	"context"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -90,8 +89,8 @@ func (c *VolumeUsagesCollector) collect() ([]VolumeUsageMetric, error) {
 	if err != nil {
 		return nil, err
 	}
-	metrics := volumeusageParse(out, c.target, c.logger)
-	return metrics, nil
+	metrics, err := volumeusageParse(out, c.target, c.logger)
+	return metrics, err
 }
 
 func dsmadmcVolumeUsages(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
@@ -100,17 +99,18 @@ func dsmadmcVolumeUsages(target *config.Target, ctx context.Context, logger log.
 	return out, err
 }
 
-func volumeusageParse(out string, target *config.Target, logger log.Logger) []VolumeUsageMetric {
+func volumeusageParse(out string, target *config.Target, logger log.Logger) ([]VolumeUsageMetric, error) {
 	nodeVolumes := make(map[string][]string)
 	var metrics []VolumeUsageMetric
-	lines := strings.Split(out, "\n")
-	for _, line := range lines {
-		l := strings.TrimSpace(line)
-		items := strings.Split(l, ",")
-		if len(items) != 2 {
+	records, err := getRecords(out, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != 2 {
 			continue
 		}
-		nodeVolumes[items[0]] = append(nodeVolumes[items[0]], items[1])
+		nodeVolumes[record[0]] = append(nodeVolumes[record[0]], record[1])
 	}
 	for nodename, volumes := range nodeVolumes {
 		var metric VolumeUsageMetric
@@ -137,5 +137,5 @@ func volumeusageParse(out string, target *config.Target, logger log.Logger) []Vo
 		metric.volumecounts = volumecounts
 		metrics = append(metrics, metric)
 	}
-	return metrics
+	return metrics, nil
 }

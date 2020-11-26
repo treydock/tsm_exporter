@@ -29,6 +29,7 @@ import (
 
 var (
 	mockVolumeUsageStdout = `
+Ignore
 NETAPPUSER2,F00665L7
 NETAPPUSER2,F00665L7
 NETAPPUSER2,F00665L7
@@ -44,7 +45,11 @@ func TestVolumeUsagesParse(t *testing.T) {
 		"LTO6": "^E",
 		"LTO7": "^F",
 	}}
-	metrics := volumeusageParse(mockVolumeUsageStdout, target, log.NewNopLogger())
+	metrics, err := volumeusageParse(mockVolumeUsageStdout, target, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %v", len(metrics))
 	}
@@ -64,12 +69,28 @@ func TestVolumeUsagesParse(t *testing.T) {
 }
 
 func TestVolumeUsagesParseNoMap(t *testing.T) {
-	metrics := volumeusageParse(mockVolumeUsageStdout, &config.Target{}, log.NewNopLogger())
+	metrics, err := volumeusageParse(mockVolumeUsageStdout, &config.Target{}, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if len(metrics) != 2 {
 		t.Errorf("Expected 2 metrics, got %v", len(metrics))
 	}
 	if val := len(metrics[0].volumecounts); val != 1 {
 		t.Errorf("Expected 1 volume counts, got %d", val)
+	}
+}
+
+func TestVolumeUsagesParseErrors(t *testing.T) {
+	tests := []string{
+		"NETAPPUSER2,\"F00665L7\n",
+	}
+	for i, out := range tests {
+		_, err := volumeusageParse(out, &config.Target{}, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error in test case %d", i)
+		}
 	}
 }
 

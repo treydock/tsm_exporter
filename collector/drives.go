@@ -101,39 +101,44 @@ func (c *DrivesCollector) collect() ([]DriveMetric, error) {
 	if err != nil {
 		return nil, err
 	}
-	metrics := drivesParse(out, c.logger)
-	return metrics, nil
+	metrics, err := drivesParse(out, c.logger)
+	return metrics, err
 }
 
-func dsmadmcDrives(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func buildDrivesQuery(target *config.Target) string {
 	query := "SELECT library_name,drive_name,online,drive_state,volume_name FROM drives"
 	if target.LibraryName != "" {
 		query = query + fmt.Sprintf(" WHERE library_name='%s'", target.LibraryName)
 	}
-	out, err := dsmadmcQuery(target, query, ctx, logger)
+	return query
+}
+
+func dsmadmcDrives(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildDrivesQuery(target), ctx, logger)
 	return out, err
 }
 
-func drivesParse(out string, logger log.Logger) []DriveMetric {
+func drivesParse(out string, logger log.Logger) ([]DriveMetric, error) {
 	var metrics []DriveMetric
-	lines := strings.Split(out, "\n")
-	for _, line := range lines {
-		l := strings.TrimSpace(line)
-		items := strings.Split(l, ",")
-		if len(items) != 5 {
+	records, err := getRecords(out, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != 5 {
 			continue
 		}
 		var metric DriveMetric
-		metric.library = items[0]
-		metric.name = items[1]
-		if items[2] == "YES" {
+		metric.library = record[0]
+		metric.name = record[1]
+		if record[2] == "YES" {
 			metric.online = true
 		} else {
 			metric.online = false
 		}
-		metric.state = strings.ToLower(items[3])
-		metric.volume = items[4]
+		metric.state = strings.ToLower(record[3])
+		metric.volume = record[4]
 		metrics = append(metrics, metric)
 	}
-	return metrics
+	return metrics, nil
 }

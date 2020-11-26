@@ -11,3 +11,17 @@ targets:
     volumeusage_map:
       LTO6: '^E.*'
       LT07: '^F.*'
+  tsm2.example.com:
+    servername: tsm1
+    id: somwell
+    password: secret
+    library_name: LIB1
+    schedules:
+      - DB1
+    replication_node_names:
+      - TEST1
+    volumeusage_map:
+      LTO6: '^E.*'
+      LT07: '^F.*'
+    collectors:
+      - volumes

@@ -61,7 +61,7 @@ type DBMetric struct {
 	TotalBuffReq float64
 	SortOverflow float64
 	PkgHitRatio  float64
-	LastBackup   string
+	LastBackup   float64
 }
 
 type DBCollector struct {
@@ -156,12 +156,7 @@ func (c *DBCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(c.TotalBuffReq, prometheus.CounterValue, m.TotalBuffReq, m.Name)
 		ch <- prometheus.MustNewConstMetric(c.SortOverflow, prometheus.GaugeValue, m.SortOverflow, m.Name)
 		ch <- prometheus.MustNewConstMetric(c.PkgHitRatio, prometheus.GaugeValue, m.PkgHitRatio, m.Name)
-		lastBackup, err := time.Parse("2006-01-02 15:04:05.000000", m.LastBackup)
-		if err == nil {
-			ch <- prometheus.MustNewConstMetric(c.LastBackup, prometheus.GaugeValue, float64(lastBackup.Unix()), m.Name)
-		} else {
-			level.Error(c.logger).Log("msg", fmt.Sprintf("Error parsing lastBackup value %s: %s", m.LastBackup, err.Error()))
-		}
+		ch <- prometheus.MustNewConstMetric(c.LastBackup, prometheus.GaugeValue, m.LastBackup, m.Name)
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "db")
@@ -176,8 +171,8 @@ func (c *DBCollector) collect() ([]DBMetric, error) {
 	if err != nil {
 		return nil, err
 	}
-	metrics := dbParse(out, c.logger)
-	return metrics, nil
+	metrics, err := dbParse(out, c.logger)
+	return metrics, err
 }
 
 func dsmadmcDB(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
@@ -187,13 +182,15 @@ func dsmadmcDB(target *config.Target, ctx context.Context, logger log.Logger) (s
 	return out, err
 }
 
-func dbParse(out string, logger log.Logger) []DBMetric {
+func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
 	var metrics []DBMetric
 	fields := getDBFields()
-	lines := strings.Split(out, "\n")
-	for _, l := range lines {
-		values := strings.Split(strings.TrimSpace(l), ",")
-		if len(values) != len(fields) {
+	records, err := getRecords(out, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != len(fields) {
 			continue
 		}
 		var metric DBMetric
@@ -202,13 +199,20 @@ func dbParse(out string, logger log.Logger) []DBMetric {
 		for i, k := range fields {
 			field := dbMap[k]
 			f := s.FieldByName(field)
-			if f.Kind() == reflect.String {
-				f.SetString(values[i])
-			} else {
-				val, err := parseFloat(values[i])
+			if strings.HasSuffix(k, "_DATE") {
+				t, err := time.Parse(timeFormat, record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", fmt.Sprintf("Error parsing %s value %s: %s", k, values[i], err.Error()))
-					continue
+					level.Error(logger).Log("msg", "Error parsing time", "key", k, "value", record[i], "err", err)
+					return nil, err
+				}
+				f.SetFloat(float64(t.Unix()))
+			} else if f.Kind() == reflect.String {
+				f.SetString(record[i])
+			} else {
+				val, err := parseFloat(record[i])
+				if err != nil {
+					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "err", err)
+					return nil, err
 				}
 				if strings.HasSuffix(k, "_MB") {
 					val = val * 1024 * 1024
@@ -220,7 +224,7 @@ func dbParse(out string, logger log.Logger) []DBMetric {
 		}
 		metrics = append(metrics, metric)
 	}
-	return metrics
+	return metrics, nil
 }
 
 func getDBFields() []string {

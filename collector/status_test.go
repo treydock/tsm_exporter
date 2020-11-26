@@ -29,12 +29,17 @@ import (
 
 var (
 	mockStatusStdout = `
+Ignore
 SP03,,1500,Off,Yes,05/22/2019 13:26:41,03/11/2020 14:36:50,On,90 Day(s),0,8,Closed,No,Enabled,,,Off,30 Day(s),3700264,116 M,30 Day(s),30 Day(s),03/12/2020 14:38:16,Valid,Active,150,75,10 Day(s),5 Day(s),25,Client,Client,Client,0 %,Any,CONSOLE ACTLOG SYSLOG,Off,60,,Off,120 Minute(s),c8.ee.08.6c.34.73.e9.11.8a.10.4c.d9.8f.3a.9c.76,Off,/tsm/db/tsminst1,"2,096,671.99","219,392.85","1,877,279.14",AES,180,Enabled,SP5,ALL_DATA,ALL_DATA,ALL_DATA,30 Day(s),,No,Local,,365 Day(s),On,614.64,0.00,03/18/2020 14:39:03,"507,029,699.15",4,03/22/2020 14:56:25,
 `
 )
 
 func TestStatusParse(t *testing.T) {
-	metrics := statusParse(mockStatusStdout, log.NewNopLogger())
+	metrics, err := statusParse(mockStatusStdout, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if metrics.status != 1 {
 		t.Errorf("Expected status 1, got %v", metrics.status)
 	}
@@ -43,8 +48,24 @@ func TestStatusParse(t *testing.T) {
 	}
 }
 
+func TestStatusErrors(t *testing.T) {
+	tests := []string{
+		"SP03,,1500,\"Off,\n",
+	}
+	for i, out := range tests {
+		_, err := statusParse(out, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error in test case %d", i)
+		}
+	}
+}
+
 func TestStatusParseNoServername(t *testing.T) {
-	metrics := statusParse("", log.NewNopLogger())
+	metrics, err := statusParse("", log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if metrics.status != 0 {
 		t.Errorf("Expected status 0, got %v", metrics.status)
 	}

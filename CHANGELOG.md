@@ -26,6 +26,8 @@
 * Fix libvolume query
 * Add `library` label to `tsm_libvolume_media` metric
 * Fix parsing to handle cases where TSM queries return decimal numbers with a comma instead of a period
+* Use CSV parser when parsing TSM data from queries
+* Improved error handling, return error metric if any parsing has errors
 
 ## 0.6.0 / 2020-11-06
 

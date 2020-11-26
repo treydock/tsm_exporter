@@ -113,8 +113,8 @@ func (c *OccupancysCollector) collect() ([]OccupancyMetric, error) {
 	if err != nil {
 		return nil, err
 	}
-	metrics := occupancyParse(out, c.logger)
-	return metrics, nil
+	metrics, err := occupancyParse(out, c.logger)
+	return metrics, err
 }
 
 func dsmadmcOccupancys(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
@@ -136,13 +136,15 @@ func dsmadmcOccupancys(target *config.Target, ctx context.Context, logger log.Lo
 	return out, err
 }
 
-func occupancyParse(out string, logger log.Logger) []OccupancyMetric {
+func occupancyParse(out string, logger log.Logger) ([]OccupancyMetric, error) {
 	var metrics []OccupancyMetric
 	fields := getOccupancyFields()
-	lines := strings.Split(out, "\n")
-	for _, l := range lines {
-		values := strings.Split(strings.TrimSpace(l), ",")
-		if len(values) != len(fields) {
+	records, err := getRecords(out, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != len(fields) {
 			continue
 		}
 		var metric OccupancyMetric
@@ -152,12 +154,12 @@ func occupancyParse(out string, logger log.Logger) []OccupancyMetric {
 			field := occupancyMap[k]
 			f := s.FieldByName(field)
 			if f.Kind() == reflect.String {
-				f.SetString(values[i])
+				f.SetString(record[i])
 			} else {
-				val, err := parseFloat(values[i])
+				val, err := parseFloat(record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", fmt.Sprintf("Error parsing %s value %s: %s", k, values[i], err.Error()))
-					continue
+					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "err", err)
+					return nil, err
 				}
 				if strings.HasSuffix(k, "_MB") {
 					valBytes := val * 1024 * 1024
@@ -169,7 +171,7 @@ func occupancyParse(out string, logger log.Logger) []OccupancyMetric {
 		}
 		metrics = append(metrics, metric)
 	}
-	return metrics
+	return metrics, nil
 }
 
 func getOccupancyFields() []string {

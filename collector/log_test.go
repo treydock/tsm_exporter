@@ -28,13 +28,46 @@ import (
 )
 
 var (
-	mockedLogStdout = "32426.00,32768.00,342.00\n"
+	mockedLogStdout = `
+Ignored
+32426.00,32768.00,342.00
+`
+
+	mockedLogStdoutComma = "\"32426,00\",\"32768,00\",\"342,00\"\n"
 )
 
 func TestLogParse(t *testing.T) {
-	metrics := logParse(mockedLogStdout, log.NewNopLogger())
+	metrics, err := logParse(mockedLogStdout, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if val := metrics.Total; val != 34359738368 {
 		t.Errorf("Unexpected Total, got %v", val)
+	}
+}
+
+func TestLogParseComma(t *testing.T) {
+	metrics, err := logParse(mockedLogStdoutComma, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
+	if val := metrics.Total; val != 34359738368 {
+		t.Errorf("Unexpected Total, got %v", val)
+	}
+}
+
+func TestLogParseErrors(t *testing.T) {
+	tests := []string{
+		"32426.00,32768.00,foo\n",
+		"\"32426,00\",\"32768\",00\",\"342,00\"\n",
+	}
+	for i, out := range tests {
+		_, err := logParse(out, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error in test case %d", i)
+		}
 	}
 }
 
