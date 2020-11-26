@@ -33,6 +33,7 @@ var (
 Data,to,ignore
 /home,59.94,NETAPPUSER,3,59.94,PFNETAPP
 /fs/project,1805773220.21,PROJECT,316487756,1806568784.42,PTGPFS
+/usr/exploit,,MORGON,592,,CLOUDTSMAZ
 `
 	mockOccupancyStdoutComma = `
 /home,"59,94",NETAPPUSER,3,"59,94",PFNETAPP
@@ -46,8 +47,8 @@ func TestOccupancysParse(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 		return
 	}
-	if len(metrics) != 2 {
-		t.Errorf("Expected 2 metrics, got %v", len(metrics))
+	if len(metrics) != 3 {
+		t.Errorf("Expected 3 metrics, got %v", len(metrics))
 	}
 	if val := metrics[0].Logical; val != 62851645.44 {
 		t.Errorf("Unexpected value for Logical, got: %v", val)
@@ -99,6 +100,7 @@ func TestOccupancysCollector(t *testing.T) {
 	# TYPE tsm_occupancy_files gauge
 	tsm_occupancy_files{filespace="/fs/project",nodename="PROJECT",storagepool="PTGPFS"} 316487756
 	tsm_occupancy_files{filespace="/home",nodename="NETAPPUSER",storagepool="PFNETAPP"} 3
+	tsm_occupancy_files{filespace="/usr/exploit",nodename="MORGON",storagepool="CLOUDTSMAZ"} 592
 	# HELP tsm_occupancy_logical_bytes Logical space occupied
 	# TYPE tsm_occupancy_logical_bytes gauge
 	tsm_occupancy_logical_bytes{filespace="/fs/project",nodename="PROJECT",storagepool="PTGPFS"} 1893490460154920.96
@@ -112,8 +114,8 @@ func TestOccupancysCollector(t *testing.T) {
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 9 {
-		t.Errorf("Unexpected collection count %d, expected 9", val)
+	} else if val != 10 {
+		t.Errorf("Unexpected collection count %d, expected 10", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_occupancy_files", "tsm_occupancy_logical_bytes", "tsm_occupancy_physical_bytes",

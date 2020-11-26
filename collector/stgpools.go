@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -85,6 +86,9 @@ func (c *StoragePoolCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, m := range metrics {
+		if math.IsNaN(m.PercentUtilized) {
+			continue
+		}
 		ch <- prometheus.MustNewConstMetric(c.PercentUtilized, prometheus.GaugeValue, m.PercentUtilized, m.Name, m.PoolType, m.ClassName, m.StorageType)
 	}
 

@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -107,6 +108,9 @@ func boolToFloat64(data bool) float64 {
 }
 
 func parseFloat(v string) (float64, error) {
+	if v == "" {
+		return math.NaN(), nil
+	}
 	if strings.Contains(v, ",") {
 		values := strings.Split(v, ",")
 		last := values[len(values)-1]

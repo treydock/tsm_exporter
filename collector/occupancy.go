@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -96,9 +97,15 @@ func (c *OccupancysCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, m := range metrics {
-		ch <- prometheus.MustNewConstMetric(c.physical, prometheus.GaugeValue, m.Physical, m.NodeName, m.FilespaceName, m.StoragePoolName)
-		ch <- prometheus.MustNewConstMetric(c.logical, prometheus.GaugeValue, m.Logical, m.NodeName, m.FilespaceName, m.StoragePoolName)
-		ch <- prometheus.MustNewConstMetric(c.files, prometheus.GaugeValue, m.Files, m.NodeName, m.FilespaceName, m.StoragePoolName)
+		if !math.IsNaN(m.Physical) {
+			ch <- prometheus.MustNewConstMetric(c.physical, prometheus.GaugeValue, m.Physical, m.NodeName, m.FilespaceName, m.StoragePoolName)
+		}
+		if !math.IsNaN(m.Logical) {
+			ch <- prometheus.MustNewConstMetric(c.logical, prometheus.GaugeValue, m.Logical, m.NodeName, m.FilespaceName, m.StoragePoolName)
+		}
+		if !math.IsNaN(m.Files) {
+			ch <- prometheus.MustNewConstMetric(c.files, prometheus.GaugeValue, m.Files, m.NodeName, m.FilespaceName, m.StoragePoolName)
+		}
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "occupancy")

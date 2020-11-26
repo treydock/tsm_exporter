@@ -15,6 +15,7 @@ package collector
 
 import (
 	"context"
+	"math"
 	"regexp"
 	"time"
 
@@ -96,8 +97,12 @@ func (c *VolumesCollector) Collect(ch chan<- prometheus.Metric) {
 		case "READONLY":
 			readonly++
 		}
-		ch <- prometheus.MustNewConstMetric(c.utilized, prometheus.GaugeValue, m.utilized, m.name, m.classname)
-		ch <- prometheus.MustNewConstMetric(c.capacity, prometheus.GaugeValue, m.capacity, m.name, m.classname)
+		if !math.IsNaN(m.utilized) {
+			ch <- prometheus.MustNewConstMetric(c.utilized, prometheus.GaugeValue, m.utilized, m.name, m.classname)
+		}
+		if !math.IsNaN(m.capacity) {
+			ch <- prometheus.MustNewConstMetric(c.capacity, prometheus.GaugeValue, m.capacity, m.name, m.classname)
+		}
 	}
 	if err == nil {
 		ch <- prometheus.MustNewConstMetric(c.unavailable, prometheus.GaugeValue, unavailable)
