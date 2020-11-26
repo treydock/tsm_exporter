@@ -96,7 +96,8 @@ The hosts being queried by this exporter must exist in `/opt/tivoli/tsm/client/b
 To validate your system is able to properly query TSM servers (substitute environment variables for real values):
 
 ```
-/opt/tivoli/tsm/client/ba/bin/dsmadmc -servername=$SERVERNAME -id=$USERNAME -password=$PASSWORD "QUERY STATUS"
+/opt/tivoli/tsm/client/ba/bin/dsmadmc -servername=$SERVERNAME -id=$USERNAME -password=$PASSWORD \
+  -DATAONLY=YES -COMMAdelimited "QUERY STATUS"
 ```
 
 This has been validated on a host with `TIVsm-BA` and `TIVsm-API64` RPMs installed.
