@@ -26,6 +26,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/treydock/tsm_exporter/collector"
 	"github.com/treydock/tsm_exporter/config"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const (
@@ -76,18 +77,14 @@ BAR,/BAZ
 )
 
 func TestMain(m *testing.M) {
-	target1 := config.Target{}
-	target2 := config.Target{Collectors: []string{"volumes"}}
-	c := &config.Config{}
-	c.Targets = make(map[string]*config.Target)
-	c.Targets["test1"] = &target1
-	c.Targets["test2"] = &target2
+	if _, err := kingpin.CommandLine.Parse([]string{"--config.file", "config/testdata/tsm_exporter.yaml", "--web.listen-address", address}); err != nil {
+		fmt.Printf("ERROR parsing arguments %s", err)
+		os.Exit(1)
+	}
+	w := log.NewSyncWriter(os.Stderr)
+	logger := log.NewLogfmtLogger(w)
 	go func() {
-		http.Handle("/tsm", metricsHandler(c, log.NewNopLogger()))
-		err := http.ListenAndServe(address, nil)
-		if err != nil {
-			os.Exit(1)
-		}
+		run(logger)
 	}()
 	time.Sleep(1 * time.Second)
 
@@ -127,7 +124,7 @@ func TestMetricsHandler(t *testing.T) {
 	collector.DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockReplicationViewNotCompletedStdout, nil
 	}
-	body, err := queryExporter("target=test1", http.StatusOK)
+	body, err := queryExporter("target=tsm1.example.com", http.StatusOK)
 	if err != nil {
 		t.Fatalf("Unexpected error GET /tsm: %s", err.Error())
 	}
@@ -167,7 +164,7 @@ func TestMetricsHandlerCollectorsDefined(t *testing.T) {
 	collector.DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockReplicationViewNotCompletedStdout, nil
 	}
-	body, err := queryExporter("target=test2", http.StatusOK)
+	body, err := queryExporter("target=tsm2.example.com", http.StatusOK)
 	if err != nil {
 		t.Fatalf("Unexpected error GET /tsm: %s", err.Error())
 	}

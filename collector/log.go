@@ -106,8 +106,8 @@ func (c *LogCollector) collect() (LogMetric, error) {
 	if err != nil {
 		return LogMetric{}, err
 	}
-	metrics := logParse(out, c.logger)
-	return metrics, nil
+	metrics, err := logParse(out, c.logger)
+	return metrics, err
 }
 
 func dsmadmcLog(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
@@ -117,13 +117,15 @@ func dsmadmcLog(target *config.Target, ctx context.Context, logger log.Logger) (
 	return out, err
 }
 
-func logParse(out string, logger log.Logger) LogMetric {
+func logParse(out string, logger log.Logger) (LogMetric, error) {
 	var metric LogMetric
 	fields := getLogFields()
-	lines := strings.Split(out, "\n")
-	for _, l := range lines {
-		values := strings.Split(strings.TrimSpace(l), ",")
-		if len(values) != len(fields) {
+	records, err := getRecords(out, logger)
+	if err != nil {
+		return LogMetric{}, err
+	}
+	for _, record := range records {
+		if len(record) != len(fields) {
 			continue
 		}
 		ps := reflect.ValueOf(&metric) // pointer to struct - addressable
@@ -132,12 +134,12 @@ func logParse(out string, logger log.Logger) LogMetric {
 			field := logMap[k]
 			f := s.FieldByName(field)
 			if f.Kind() == reflect.String {
-				f.SetString(values[i])
+				f.SetString(record[i])
 			} else {
-				val, err := parseFloat(values[i])
+				val, err := parseFloat(record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", fmt.Sprintf("Error parsing %s value %s: %s", k, values[i], err.Error()))
-					continue
+					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "err", err)
+					return LogMetric{}, err
 				}
 				if strings.HasSuffix(k, "_MB") {
 					valBytes := val * 1024.0 * 1024.0
@@ -148,7 +150,7 @@ func logParse(out string, logger log.Logger) LogMetric {
 			}
 		}
 	}
-	return metric
+	return metric, nil
 }
 
 func getLogFields() []string {

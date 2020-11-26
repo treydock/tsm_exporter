@@ -36,12 +36,54 @@ READWRITE,9067296.0,43.7,DCULT7,F00397L7
 UNAVAILABLE,8199467.0,68.5,DCULT7,F00640L7
 READONLY,5735346.0,94.6,DCULT7,F00529L7
 `
+	mockVolumeStdoutComma = `
+READWRITE,"512000,0","0,0",DCFILEE,/fs/diskpool/sp02/enc-gpfs/svol49
+READWRITE,"2396430,0","100,0",DCULT6E,E00090L6
+READWRITE,"9067296,0","43,7",DCULT7,F00397L7
+UNAVAILABLE,"8199467,0","68,5",DCULT7,F00640L7
+READONLY,"5735346,0","94,6",DCULT7,F00529L7
+`
 )
 
 func TestVolumesParse(t *testing.T) {
-	metrics := volumesParse(mockVolumeStdout, log.NewNopLogger())
+	metrics, err := volumesParse(mockVolumeStdout, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
 	if val := len(metrics); val != 5 {
 		t.Errorf("Expected 5 metrics, got %d", val)
+	}
+	if val := metrics[1].utilized; val != 1.0 {
+		t.Errorf("Unexpected utilized, got %v", val)
+	}
+}
+
+func TestVolumesParseComma(t *testing.T) {
+	metrics, err := volumesParse(mockVolumeStdoutComma, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
+	if val := len(metrics); val != 5 {
+		t.Errorf("Expected 5 metrics, got %d", val)
+	}
+	if val := metrics[1].utilized; val != 1.0 {
+		t.Errorf("Unexpected utilized, got %v", val)
+	}
+}
+
+func TestVolumesParseError(t *testing.T) {
+	tests := []string{
+		"READWRITE,foo,100.0,DCULT6E,E00090L6\n",
+		"READWRITE,2396430.0,foo,DCULT6E,E00090L6\n",
+		"UNAVAILABLE,\"8199467\",0\",\"68,5\",DCULT7,F00640L7",
+	}
+	for i, out := range tests {
+		_, err := volumesParse(out, log.NewNopLogger())
+		if err == nil {
+			t.Errorf("Expected error for test case %d", i)
+		}
 	}
 }
 

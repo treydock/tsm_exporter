@@ -15,7 +15,6 @@ package collector
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -89,8 +88,8 @@ func (c *StatusCollector) collect() (StatusMetric, error) {
 	if err != nil {
 		return StatusMetric{}, err
 	}
-	metrics := statusParse(out, c.logger)
-	return metrics, nil
+	metrics, err := statusParse(out, c.logger)
+	return metrics, err
 }
 
 func dsmadmcStatus(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
@@ -99,21 +98,22 @@ func dsmadmcStatus(target *config.Target, ctx context.Context, logger log.Logger
 	return out, err
 }
 
-func statusParse(out string, logger log.Logger) StatusMetric {
+func statusParse(out string, logger log.Logger) (StatusMetric, error) {
 	var metric StatusMetric
-	lines := strings.Split(out, "\n")
-	for _, line := range lines {
-		l := strings.TrimSpace(line)
-		items := strings.Split(l, ",")
-		if len(items) < 2 {
+	records, err := getRecords(out, logger)
+	if err != nil {
+		return StatusMetric{}, err
+	}
+	for _, record := range records {
+		if len(record) < 2 {
 			continue
 		}
-		metric.serverName = items[0]
+		metric.serverName = record[0]
 		metric.status = 1
 	}
 	if metric.serverName == "" {
 		metric.status = 0
 		metric.reason = "servername not found"
 	}
-	return metric
+	return metric, nil
 }

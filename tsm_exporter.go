@@ -30,6 +30,11 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
+const (
+	tsmEndpoint     = "/tsm"
+	metricsEndpoint = "/metrics"
+)
+
 var (
 	configFile    = kingpin.Flag("config.file", "Path to exporter config file").Default("tsm_exporter.yaml").String()
 	listenAddress = kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9310").String()
@@ -66,15 +71,7 @@ func metricsHandler(config *config.Config, logger log.Logger) http.HandlerFunc {
 	}
 }
 
-func main() {
-	metricsEndpoint := "/tsm"
-	promlogConfig := &promlog.Config{}
-	flag.AddFlags(kingpin.CommandLine, promlogConfig)
-	kingpin.Version(version.Print("tsm_exporter"))
-	kingpin.HelpFlag.Short('h')
-	kingpin.Parse()
-
-	logger := promlog.New(promlogConfig)
+func run(logger log.Logger) {
 	level.Info(logger).Log("msg", "Starting tsm_exporter", "version", version.Info())
 	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
 	level.Info(logger).Log("msg", "Starting Server", "address", *listenAddress)
@@ -92,16 +89,28 @@ func main() {
              <head><title>TSM Exporter</title></head>
              <body>
              <h1>TSM Exporter</h1>
-             <p><a href='` + metricsEndpoint + `'>TSM Metrics</a></p>
-             <p><a href='/metrics'>Exporter Metrics</a></p>
+             <p><a href='` + tsmEndpoint + `'>TSM Metrics</a></p>
+             <p><a href='` + metricsEndpoint + `'>Exporter Metrics</a></p>
              </body>
              </html>`))
 	})
-	http.Handle(metricsEndpoint, metricsHandler(sc.C, logger))
-	http.Handle("/metrics", promhttp.Handler())
+	http.Handle(tsmEndpoint, metricsHandler(sc.C, logger))
+	http.Handle(metricsEndpoint, promhttp.Handler())
 	err := http.ListenAndServe(*listenAddress, nil)
 	if err != nil {
 		level.Error(logger).Log("err", err)
 		os.Exit(1)
 	}
+}
+
+func main() {
+	promlogConfig := &promlog.Config{}
+	flag.AddFlags(kingpin.CommandLine, promlogConfig)
+	kingpin.Version(version.Print("tsm_exporter"))
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
+
+	logger := promlog.New(promlogConfig)
+
+	run(logger)
 }

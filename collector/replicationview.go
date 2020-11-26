@@ -16,7 +16,6 @@ package collector
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -136,8 +135,8 @@ func (c *ReplicationViewsCollector) collect() (map[string]ReplicationViewMetric,
 	if notCompletedErr != nil {
 		return nil, notCompletedErr
 	}
-	metrics := replicationviewParse(completedOut, notCompletedOut, c.logger)
-	return metrics, nil
+	metrics, err := replicationviewParse(completedOut, notCompletedOut, c.logger)
+	return metrics, err
 }
 
 func buildReplicationViewCompletedQuery(target *config.Target) string {
@@ -171,40 +170,42 @@ func dsmadmcReplicationViewsNotCompleted(target *config.Target, ctx context.Cont
 	return out, err
 }
 
-func replicationviewParse(completedOut string, notCompletedOut string, logger log.Logger) map[string]ReplicationViewMetric {
+func replicationviewParse(completedOut string, notCompletedOut string, logger log.Logger) (map[string]ReplicationViewMetric, error) {
 	metrics := make(map[string]ReplicationViewMetric)
-	lines := strings.Split(completedOut, "\n")
-	for _, line := range lines {
-		values := strings.Split(strings.TrimSpace(line), ",")
-		if len(values) != 6 {
+	records, err := getRecords(completedOut, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != 6 {
 			continue
 		}
 		var metric ReplicationViewMetric
-		nodeName := values[0]
-		fsName := values[1]
+		nodeName := record[0]
+		fsName := record[1]
 		key := fmt.Sprintf("%s-%s", nodeName, fsName)
 		if _, ok := metrics[key]; ok {
 			continue
 		}
-		startTime, err := time.Parse(timeFormat, values[2])
+		startTime, err := time.Parse(timeFormat, record[2])
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse START_TIME", "value", values[2], "err", err)
-			continue
+			level.Error(logger).Log("msg", "Failed to parse START_TIME", "value", record[2], "err", err)
+			return nil, err
 		}
-		endTime, err := time.Parse(timeFormat, values[3])
+		endTime, err := time.Parse(timeFormat, record[3])
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", values[3], "err", err)
-			continue
+			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", record[3], "err", err)
+			return nil, err
 		}
-		replicatedFiles, err := parseFloat(values[4])
+		replicatedFiles, err := parseFloat(record[4])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing replicated files", "value", values[4], "err", err)
-			continue
+			level.Error(logger).Log("msg", "Error parsing replicated files", "value", record[4], "err", err)
+			return nil, err
 		}
-		replicatedBytes, err := parseFloat(values[5])
+		replicatedBytes, err := parseFloat(record[5])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing replicated bytes", "value", values[5], "err", err)
-			continue
+			level.Error(logger).Log("msg", "Error parsing replicated bytes", "value", record[5], "err", err)
+			return nil, err
 		}
 		metric.NodeName = nodeName
 		metric.FsName = fsName
@@ -215,15 +216,17 @@ func replicationviewParse(completedOut string, notCompletedOut string, logger lo
 		metric.ReplicatedBytes = replicatedBytes
 		metrics[key] = metric
 	}
-	lines = strings.Split(notCompletedOut, "\n")
-	for _, line := range lines {
-		values := strings.Split(strings.TrimSpace(line), ",")
-		if len(values) != 2 {
+	records, err = getRecords(notCompletedOut, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != 2 {
 			continue
 		}
 		var metric ReplicationViewMetric
-		nodeName := values[0]
-		fsName := values[1]
+		nodeName := record[0]
+		fsName := record[1]
 		key := fmt.Sprintf("%s-%s", nodeName, fsName)
 		if m, ok := metrics[key]; ok {
 			metric = m
@@ -234,5 +237,5 @@ func replicationviewParse(completedOut string, notCompletedOut string, logger lo
 		metric.NotCompleted++
 		metrics[key] = metric
 	}
-	return metrics
+	return metrics, nil
 }

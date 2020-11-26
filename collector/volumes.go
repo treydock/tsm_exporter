@@ -16,7 +16,6 @@ package collector
 import (
 	"context"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -117,8 +116,8 @@ func (c *VolumesCollector) collect() ([]VolumeMetric, error) {
 	if err != nil {
 		return nil, err
 	}
-	metrics := volumesParse(out, c.logger)
-	return metrics, nil
+	metrics, err := volumesParse(out, c.logger)
+	return metrics, err
 }
 
 func dsmadmcVolumes(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
@@ -127,37 +126,38 @@ func dsmadmcVolumes(target *config.Target, ctx context.Context, logger log.Logge
 	return out, err
 }
 
-func volumesParse(out string, logger log.Logger) []VolumeMetric {
+func volumesParse(out string, logger log.Logger) ([]VolumeMetric, error) {
 	classnameExcludePattern := regexp.MustCompile(*volumesClassnameExclude)
 	var metrics []VolumeMetric
-	lines := strings.Split(out, "\n")
-	for _, line := range lines {
-		l := strings.TrimSpace(line)
-		items := strings.Split(l, ",")
-		if len(items) != 5 {
+	records, err := getRecords(out, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != 5 {
 			continue
 		}
 		var metric VolumeMetric
-		metric.name = items[4]
-		metric.classname = items[3]
+		metric.name = record[4]
+		metric.classname = record[3]
 		if *volumesClassnameExclude != "" && classnameExcludePattern.MatchString(metric.classname) {
 			level.Debug(logger).Log("msg", "Skipping volume due to classname exclude", "volume", metric.name, "classname", metric.classname)
 			continue
 		}
-		metric.access = items[0]
-		capacity, err := parseFloat(items[1])
+		metric.access = record[0]
+		capacity, err := parseFloat(record[1])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing est_capacity_mb", "value", items[1], "err", err)
-			continue
+			level.Error(logger).Log("msg", "Error parsing est_capacity_mb", "value", record[1], "err", err)
+			return nil, err
 		}
 		metric.capacity = capacity * 1024 * 1024
-		utilized, err := parseFloat(items[2])
+		utilized, err := parseFloat(record[2])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing pct_utilized value", "value", items[2], "err", err)
-			continue
+			level.Error(logger).Log("msg", "Error parsing pct_utilized value", "value", record[2], "err", err)
+			return nil, err
 		}
 		metric.utilized = utilized / 100
 		metrics = append(metrics, metric)
 	}
-	return metrics
+	return metrics, nil
 }

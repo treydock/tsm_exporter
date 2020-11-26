@@ -16,7 +16,6 @@ package collector
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -111,8 +110,8 @@ func (c *EventsCollector) collect() (map[string]EventMetric, error) {
 	if notCompletedErr != nil {
 		return nil, notCompletedErr
 	}
-	metrics := eventsParse(completedOut, notCompletedOut, c.logger)
-	return metrics, nil
+	metrics, err := eventsParse(completedOut, notCompletedOut, c.logger)
+	return metrics, err
 }
 
 func buildEventsCompletedQuery(target *config.Target) string {
@@ -146,28 +145,30 @@ func dsmadmcEventsNotCompleted(target *config.Target, ctx context.Context, logge
 	return out, err
 }
 
-func eventsParse(completedOut string, notCompletedOut string, logger log.Logger) map[string]EventMetric {
+func eventsParse(completedOut string, notCompletedOut string, logger log.Logger) (map[string]EventMetric, error) {
 	metrics := make(map[string]EventMetric)
 	statusCond := []string{"Completed", "Future", "Started", "In Progress", "Pending"}
-	lines := strings.Split(completedOut, "\n")
-	for _, line := range lines {
-		items := strings.Split(strings.TrimSpace(line), ",")
-		if len(items) != 3 {
+	records, err := getRecords(completedOut, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != 3 {
 			continue
 		}
-		sched := items[0]
+		sched := record[0]
 		if _, ok := metrics[sched]; ok {
 			continue
 		}
-		actual_start, err := time.Parse(timeFormat, items[1])
+		actual_start, err := time.Parse(timeFormat, record[1])
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse actual start time", "time", items[1], "err", err)
-			continue
+			level.Error(logger).Log("msg", "Failed to parse actual start time", "time", record[1], "err", err)
+			return nil, err
 		}
-		completed, err := time.Parse(timeFormat, items[2])
+		completed, err := time.Parse(timeFormat, record[2])
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse completed time", "time", items[2], "err", err)
-			continue
+			level.Error(logger).Log("msg", "Failed to parse completed time", "time", record[2], "err", err)
+			return nil, err
 		}
 		duration := completed.Sub(actual_start).Seconds()
 		var metric EventMetric
@@ -175,14 +176,16 @@ func eventsParse(completedOut string, notCompletedOut string, logger log.Logger)
 		metric.duration = duration
 		metrics[sched] = metric
 	}
-	lines = strings.Split(notCompletedOut, "\n")
-	for _, line := range lines {
-		items := strings.Split(strings.TrimSpace(line), ",")
-		if len(items) != 2 {
+	records, err = getRecords(notCompletedOut, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if len(record) != 2 {
 			continue
 		}
-		sched := items[0]
-		status := items[1]
+		sched := record[0]
+		status := record[1]
 		var metric EventMetric
 		if m, ok := metrics[sched]; ok {
 			metric = m
@@ -194,5 +197,5 @@ func eventsParse(completedOut string, notCompletedOut string, logger log.Logger)
 		}
 		metrics[sched] = metric
 	}
-	return metrics
+	return metrics, nil
 }
