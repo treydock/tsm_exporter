@@ -1,4 +1,4 @@
-## 1.0.0-rc.3 / 2020-11-26
+## 1.0.0-rc.4 / 2020-11-26
 
 ### **Breaking Changes**
 
@@ -28,6 +28,7 @@
 * Fix parsing to handle cases where TSM queries return decimal numbers with a comma instead of a period
 * Use CSV parser when parsing TSM data from queries
 * Improved error handling, return error metric if any parsing has errors
+* If numeric columns in queries are empty, do not produce errors or metrics for that missing column
 
 ## 0.6.0 / 2020-11-06
 
