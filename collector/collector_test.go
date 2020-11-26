@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -108,6 +109,11 @@ func TestParseFloat(t *testing.T) {
 			ExpectedError: "",
 		},
 		{
+			Input:         "",
+			Output:        math.NaN(),
+			ExpectedError: "",
+		},
+		{
 			Input:         "1,500",
 			Output:        0,
 			ExpectedError: "strconv.ParseFloat: parsing \"1,500\": invalid syntax",
@@ -126,7 +132,11 @@ func TestParseFloat(t *testing.T) {
 				t.Errorf("Unexpected error in case %v:\nExpected: %v\nGot: %v", i, test.ExpectedError, err.Error())
 			}
 		}
-		if val != test.Output {
+		if test.Input == "" {
+			if !math.IsNaN(val) {
+				t.Errorf("Unexpected value in case %v: Expected NaN\nGot: %v", i, val)
+			}
+		} else if val != test.Output {
 			t.Errorf("Unexpected value in case %v:\nExpected: %v\nGot: %v", i, test.Output, val)
 		}
 	}

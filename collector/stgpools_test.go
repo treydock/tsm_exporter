@@ -35,6 +35,7 @@ Data,to,ignore
 DISK,0.0,PRIMARY,ARCHIVEPOOL,DEVCLASS
 DCFILEE,41.8,PRIMARY,EPFESS,DEVCLASS
 DCULT7,42.6,PRIMARY,PTGPFS,DEVCLASS
+,,PRIMARY,CLOUDTSMAZ,CLOUD
 `
 	mockedStoragePoolStdoutComma = `
 DISK,"0,0",PRIMARY,ARCHIVEPOOL,DEVCLASS
@@ -49,8 +50,8 @@ func TestStoragePoolParse(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 		return
 	}
-	if len(metrics) != 3 {
-		t.Errorf("Expected 3 metrics, got %v", len(metrics))
+	if len(metrics) != 4 {
+		t.Errorf("Expected 4 metrics, got %v", len(metrics))
 		return
 	}
 	if val := metrics[0].Name; val != "ARCHIVEPOOL" {
