@@ -202,7 +202,7 @@ func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
 			if strings.HasSuffix(k, "_DATE") {
 				t, err := time.Parse(timeFormat, record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", "Error parsing time", "key", k, "value", record[i], "err", err)
+					level.Error(logger).Log("msg", "Error parsing time", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
 					return nil, err
 				}
 				f.SetFloat(float64(t.Unix()))
@@ -211,7 +211,7 @@ func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
 			} else {
 				val, err := parseFloat(record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "err", err)
+					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
 					return nil, err
 				}
 				if strings.HasSuffix(k, "_MB") {

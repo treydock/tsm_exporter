@@ -34,6 +34,7 @@ LIB1,TAPE10,YES,LOADED,FOO1
 LIB1,TAPE11,YES,LOADED,FOO2
 LIBENC,TAPE00,YES,EMPTY,
 LIBENC,TAPE01,NO,EMPTY,
+LIBENC,TAPE02,NO,UNKNOWN,
 `
 )
 
@@ -56,7 +57,7 @@ func TestDrivesParse(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 		return
 	}
-	if len(metrics) != 4 {
+	if len(metrics) != 5 {
 		t.Errorf("Expected 4 metrics, got %d", len(metrics))
 	}
 	if metrics[0].online != true {
@@ -90,18 +91,46 @@ func TestDrivesCollector(t *testing.T) {
 	tsm_drive_online{drive="TAPE11",library="LIB1"} 1
 	tsm_drive_online{drive="TAPE00",library="LIBENC"} 1
 	tsm_drive_online{drive="TAPE01",library="LIBENC"} 0
+	tsm_drive_online{drive="TAPE02",library="LIBENC"} 0
 	# HELP tsm_drive_state_info Current state of the drive
 	# TYPE tsm_drive_state_info gauge
+	tsm_drive_state_info{drive="TAPE10",library="LIB1",state="empty"} 0
 	tsm_drive_state_info{drive="TAPE10",library="LIB1",state="loaded"} 1
+	tsm_drive_state_info{drive="TAPE10",library="LIB1",state="reserved"} 0
+	tsm_drive_state_info{drive="TAPE10",library="LIB1",state="unavailable"} 0
+	tsm_drive_state_info{drive="TAPE10",library="LIB1",state="unloaded"} 0
+	tsm_drive_state_info{drive="TAPE10",library="LIB1",state="unknown"} 0
+	tsm_drive_state_info{drive="TAPE11",library="LIB1",state="empty"} 0
 	tsm_drive_state_info{drive="TAPE11",library="LIB1",state="loaded"} 1
+	tsm_drive_state_info{drive="TAPE11",library="LIB1",state="reserved"} 0
+	tsm_drive_state_info{drive="TAPE11",library="LIB1",state="unavailable"} 0
+	tsm_drive_state_info{drive="TAPE11",library="LIB1",state="unloaded"} 0
+	tsm_drive_state_info{drive="TAPE11",library="LIB1",state="unknown"} 0
 	tsm_drive_state_info{drive="TAPE00",library="LIBENC",state="empty"} 1
+	tsm_drive_state_info{drive="TAPE00",library="LIBENC",state="loaded"} 0
+	tsm_drive_state_info{drive="TAPE00",library="LIBENC",state="reserved"} 0
+	tsm_drive_state_info{drive="TAPE00",library="LIBENC",state="unavailable"} 0
+	tsm_drive_state_info{drive="TAPE00",library="LIBENC",state="unloaded"} 0
+	tsm_drive_state_info{drive="TAPE00",library="LIBENC",state="unknown"} 0
 	tsm_drive_state_info{drive="TAPE01",library="LIBENC",state="empty"} 1
+	tsm_drive_state_info{drive="TAPE01",library="LIBENC",state="loaded"} 0
+	tsm_drive_state_info{drive="TAPE01",library="LIBENC",state="reserved"} 0
+	tsm_drive_state_info{drive="TAPE01",library="LIBENC",state="unavailable"} 0
+	tsm_drive_state_info{drive="TAPE01",library="LIBENC",state="unloaded"} 0
+	tsm_drive_state_info{drive="TAPE01",library="LIBENC",state="unknown"} 0
+	tsm_drive_state_info{drive="TAPE02",library="LIBENC",state="empty"} 0
+	tsm_drive_state_info{drive="TAPE02",library="LIBENC",state="loaded"} 0
+	tsm_drive_state_info{drive="TAPE02",library="LIBENC",state="reserved"} 0
+	tsm_drive_state_info{drive="TAPE02",library="LIBENC",state="unavailable"} 0
+	tsm_drive_state_info{drive="TAPE02",library="LIBENC",state="unloaded"} 0
+	tsm_drive_state_info{drive="TAPE02",library="LIBENC",state="unknown"} 1
 	# HELP tsm_drive_volume_info Current volume of the drive
 	# TYPE tsm_drive_volume_info gauge
 	tsm_drive_volume_info{drive="TAPE10",library="LIB1",volume="FOO1"} 1
 	tsm_drive_volume_info{drive="TAPE11",library="LIB1",volume="FOO2"} 1
 	tsm_drive_volume_info{drive="TAPE00",library="LIBENC",volume=""} 1
 	tsm_drive_volume_info{drive="TAPE01",library="LIBENC",volume=""} 1
+	tsm_drive_volume_info{drive="TAPE02",library="LIBENC",volume=""} 1
     # HELP tsm_exporter_collect_error Indicates if error has occurred during collection
     # TYPE tsm_exporter_collect_error gauge
     tsm_exporter_collect_error{collector="drives"} 0
@@ -113,8 +142,8 @@ func TestDrivesCollector(t *testing.T) {
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 15 {
-		t.Errorf("Unexpected collection count %d, expected 15", val)
+	} else if val != 43 {
+		t.Errorf("Unexpected collection count %d, expected 43", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_drive_online", "tsm_drive_state_info", "tsm_drive_volume_info",

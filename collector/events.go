@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -162,12 +163,12 @@ func eventsParse(completedOut string, notCompletedOut string, logger log.Logger)
 		}
 		actual_start, err := time.Parse(timeFormat, record[1])
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse actual start time", "time", record[1], "err", err)
+			level.Error(logger).Log("msg", "Failed to parse actual start time", "time", record[1], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		completed, err := time.Parse(timeFormat, record[2])
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse completed time", "time", record[2], "err", err)
+			level.Error(logger).Log("msg", "Failed to parse completed time", "time", record[2], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		duration := completed.Sub(actual_start).Seconds()

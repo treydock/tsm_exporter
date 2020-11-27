@@ -17,6 +17,7 @@ import (
 	"context"
 	"math"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -152,13 +153,13 @@ func volumesParse(out string, logger log.Logger) ([]VolumeMetric, error) {
 		metric.access = record[0]
 		capacity, err := parseFloat(record[1])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing est_capacity_mb", "value", record[1], "err", err)
+			level.Error(logger).Log("msg", "Error parsing est_capacity_mb", "value", record[1], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.capacity = capacity * 1024 * 1024
 		utilized, err := parseFloat(record[2])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing pct_utilized value", "value", record[2], "err", err)
+			level.Error(logger).Log("msg", "Error parsing pct_utilized value", "value", record[2], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.utilized = utilized / 100

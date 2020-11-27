@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -123,7 +124,7 @@ func libvolumesParse(out string, logger log.Logger) ([]LibVolumeMetric, error) {
 		metric.library = record[2]
 		count, err := parseFloat(record[3])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing libvolume value", "value", record[3], "err", err)
+			level.Error(logger).Log("msg", "Error parsing libvolume value", "value", record[3], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.count = count

@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -189,22 +190,22 @@ func replicationviewParse(completedOut string, notCompletedOut string, logger lo
 		}
 		startTime, err := time.Parse(timeFormat, record[2])
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse START_TIME", "value", record[2], "err", err)
+			level.Error(logger).Log("msg", "Failed to parse START_TIME", "value", record[2], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		endTime, err := time.Parse(timeFormat, record[3])
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", record[3], "err", err)
+			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", record[3], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		replicatedFiles, err := parseFloat(record[4])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing replicated files", "value", record[4], "err", err)
+			level.Error(logger).Log("msg", "Error parsing replicated files", "value", record[4], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		replicatedBytes, err := parseFloat(record[5])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing replicated bytes", "value", record[5], "err", err)
+			level.Error(logger).Log("msg", "Error parsing replicated bytes", "value", record[5], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.NodeName = nodeName
