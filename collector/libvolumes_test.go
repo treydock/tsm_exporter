@@ -30,7 +30,6 @@ import (
 var (
 	mockLibVolumeStdout = `
 LTO-5,Private,LIB1,147
-LTO-5,Scratch,LIB1,342
 LTO-6,Private,LIB1,573
 LTO-6,Scratch,LIB1,365
 LTO-7,Private,LIB1,1082
@@ -57,8 +56,8 @@ func TestLibVolumesParse(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 		return
 	}
-	if len(metrics) != 6 {
-		t.Errorf("Expected 6 metrics, got %v", len(metrics))
+	if len(metrics) != 3 {
+		t.Errorf("Expected 3 metrics, got %v", len(metrics))
 	}
 }
 
@@ -66,6 +65,7 @@ func TestLibVolumesParseErrors(t *testing.T) {
 	tests := []string{
 		"LTO-5,Private,LIB1,foo\n",
 		"LTO-5,\"Private\"\",LIB1,147",
+		"LTO-7,Foo,LIB1,153\n",
 	}
 	for i, out := range tests {
 		_, err := libvolumesParse(out, log.NewNopLogger())
@@ -91,12 +91,12 @@ func TestLibVolumesCollector(t *testing.T) {
     tsm_exporter_collect_timeout{collector="libvolumes"} 0
 	# HELP tsm_libvolume_media Number of tapes
 	# TYPE tsm_libvolume_media gauge
-	tsm_libvolume_media{library="LIB1",mediatype="LTO-5",status="Private"} 147
-	tsm_libvolume_media{library="LIB1",mediatype="LTO-5",status="Scratch"} 342
-	tsm_libvolume_media{library="LIB1",mediatype="LTO-6",status="Private"} 573
-	tsm_libvolume_media{library="LIB1",mediatype="LTO-6",status="Scratch"} 365
-	tsm_libvolume_media{library="LIB1",mediatype="LTO-7",status="Private"} 1082
-	tsm_libvolume_media{library="LIB1",mediatype="LTO-7",status="Scratch"} 153
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-5",status="private"} 147
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-5",status="scratch"} 0
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-6",status="private"} 573
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-6",status="scratch"} 365
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-7",status="private"} 1082
+	tsm_libvolume_media{library="LIB1",mediatype="LTO-7",status="scratch"} 153
 	`
 	collector := NewLibVolumesExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
