@@ -29,6 +29,7 @@ import (
 var (
 	drivesTimeout     = kingpin.Flag("collector.drives.timeout", "Timeout for collecting drives information").Default("5").Int()
 	DsmadmcDrivesExec = dsmadmcDrives
+	driveStates       = []string{"unavailable", "empty", "loaded", "unloaded", "reserved"} // unknown defined in collector
 )
 
 type DriveMetric struct {
@@ -85,8 +86,19 @@ func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for _, m := range metrics {
 		ch <- prometheus.MustNewConstMetric(c.online, prometheus.GaugeValue, boolToFloat64(m.online), m.library, m.name)
-		ch <- prometheus.MustNewConstMetric(c.state, prometheus.GaugeValue, 1, m.library, m.name, m.state)
 		ch <- prometheus.MustNewConstMetric(c.volume, prometheus.GaugeValue, 1, m.library, m.name, m.volume)
+		for _, state := range driveStates {
+			var value float64
+			if m.state == state {
+				value = 1
+			}
+			ch <- prometheus.MustNewConstMetric(c.state, prometheus.GaugeValue, value, m.library, m.name, state)
+		}
+		var unknown float64
+		if !sliceContains(driveStates, m.state) {
+			unknown = 1
+		}
+		ch <- prometheus.MustNewConstMetric(c.state, prometheus.GaugeValue, unknown, m.library, m.name, "unknown")
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "drives")

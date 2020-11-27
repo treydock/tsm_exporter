@@ -137,7 +137,7 @@ func stgpoolsParse(out string, logger log.Logger) ([]StoragePoolMetric, error) {
 			} else {
 				val, err := parseFloat(record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "err", err)
+					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
 					return nil, err
 				}
 				if strings.Contains(field, "Percent") {

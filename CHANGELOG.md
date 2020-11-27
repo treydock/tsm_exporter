@@ -29,6 +29,8 @@
 * Use CSV parser when parsing TSM data from queries
 * Improved error handling, return error metric if any parsing has errors
 * If numeric columns in queries are empty, do not produce errors or metrics for that missing column
+* Produce a metric for each possible drive state with `tsm_drive_state_info`
+* Improved logging when parse errors are encountered
 
 ## 0.6.0 / 2020-11-06
 
