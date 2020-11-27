@@ -33,9 +33,9 @@ var (
 
 type LibVolumeMetric struct {
 	mediatype string
-	status    string
 	library   string
-	count     float64
+	private   float64
+	scratch   float64
 }
 
 type LibVolumesCollector struct {
@@ -75,7 +75,8 @@ func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, m := range metrics {
-		ch <- prometheus.MustNewConstMetric(c.media, prometheus.GaugeValue, m.count, m.mediatype, m.library, m.status)
+		ch <- prometheus.MustNewConstMetric(c.media, prometheus.GaugeValue, m.scratch, m.mediatype, m.library, "scratch")
+		ch <- prometheus.MustNewConstMetric(c.media, prometheus.GaugeValue, m.private, m.mediatype, m.library, "private")
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "libvolumes")
@@ -83,7 +84,7 @@ func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "libvolumes")
 }
 
-func (c *LibVolumesCollector) collect() ([]LibVolumeMetric, error) {
+func (c *LibVolumesCollector) collect() (map[string]LibVolumeMetric, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*libvolumesTimeout)*time.Second)
 	defer cancel()
 	out, err := DsmadmcLibVolumesExec(c.target, ctx, c.logger)
@@ -108,8 +109,8 @@ func dsmadmcLibVolumes(target *config.Target, ctx context.Context, logger log.Lo
 	return out, err
 }
 
-func libvolumesParse(out string, logger log.Logger) ([]LibVolumeMetric, error) {
-	var metrics []LibVolumeMetric
+func libvolumesParse(out string, logger log.Logger) (map[string]LibVolumeMetric, error) {
+	metrics := make(map[string]LibVolumeMetric)
 	records, err := getRecords(out, logger)
 	if err != nil {
 		return nil, err
@@ -119,16 +120,31 @@ func libvolumesParse(out string, logger log.Logger) ([]LibVolumeMetric, error) {
 			continue
 		}
 		var metric LibVolumeMetric
-		metric.mediatype = record[0]
-		metric.status = record[1]
-		metric.library = record[2]
+		mediatype := record[0]
+		library := record[2]
+		key := fmt.Sprintf("%s-%s", mediatype, library)
+		if val, ok := metrics[key]; ok {
+			metric = val
+		} else {
+			metric.mediatype = mediatype
+			metric.library = library
+		}
+		status := strings.ToLower(record[1])
 		count, err := parseFloat(record[3])
 		if err != nil {
 			level.Error(logger).Log("msg", "Error parsing libvolume value", "value", record[3], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
-		metric.count = count
-		metrics = append(metrics, metric)
+		switch status {
+		case "scratch":
+			metric.scratch += count
+		case "private":
+			metric.private += count
+		default:
+			level.Error(logger).Log("msg", "Unknown libvolume status encountered", "status", status, "record", strings.Join(record, ","))
+			return nil, fmt.Errorf("Unknown libvolume status encountered: %s", status)
+		}
+		metrics[key] = metric
 	}
 	return metrics, nil
 }
