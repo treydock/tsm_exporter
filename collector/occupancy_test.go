@@ -28,16 +28,16 @@ import (
 )
 
 var (
-	// query: SELECT FILESPACE_NAME,LOGICAL_MB,NODE_NAME,NUM_FILES,PHYSICAL_MB,STGPOOL_NAME FROM occupancy
+	// query: SELECT FILESPACE_NAME,SUM(LOGICAL_MB),NODE_NAME,SUM(NUM_FILES),SUM(PHYSICAL_MB),SUM(REPORTING_MB),STGPOOL_NAME FROM occupancy GROUP BY FILESPACE_NAME,NODE_NAME,STGPOOL_NAME
 	mockOccupancyStdout = `
 Data,to,ignore
-/home,59.94,NETAPPUSER,3,59.94,PFNETAPP
-/fs/project,1805773220.21,PROJECT,316487756,1806568784.42,PTGPFS
-/usr/exploit,,MORGON,592,,CLOUDTSMAZ
+/home,59.94,NETAPPUSER,3,59.94,58.00,PFNETAPP
+/fs/project,1805773220.21,PROJECT,316487756,1806568784.42,1706568784.42,PTGPFS
+/usr/exploit,,MORGON,592,,1000.0,CLOUDTSMAZ
 `
 	mockOccupancyStdoutComma = `
-/home,"59,94",NETAPPUSER,3,"59,94",PFNETAPP
-/fs/project,"1805773220,21",PROJECT,316487756,"1806568784,42",PTGPFS
+/home,"59,94",NETAPPUSER,3,"59,94","58,00",PFNETAPP
+/fs/project,"1805773220,21",PROJECT,316487756,"1806568784,42","1706568784,42",PTGPFS
 `
 )
 
@@ -71,8 +71,8 @@ func TestOccupancysParseComma(t *testing.T) {
 
 func TestOccupancysParseErrors(t *testing.T) {
 	tests := []string{
-		"/home,foo,NETAPPUSER,3,59.94,PFNETAPP\n",
-		"/home,\"59\",94\",NETAPPUSER,3,\"59,94\",PFNETAPP",
+		"/home,foo,NETAPPUSER,3,59.94,59.94,PFNETAPP\n",
+		"/home,\"59\",94\",NETAPPUSER,3,\"59,94\",\"59,94\",PFNETAPP",
 	}
 	for i, out := range tests {
 		_, err := occupancyParse(out, log.NewNopLogger())
@@ -109,16 +109,22 @@ func TestOccupancysCollector(t *testing.T) {
 	# TYPE tsm_occupancy_physical_bytes gauge
 	tsm_occupancy_physical_bytes{filespace="/fs/project",nodename="PROJECT",storagepool="PTGPFS"} 1894324669691986
 	tsm_occupancy_physical_bytes{filespace="/home",nodename="NETAPPUSER",storagepool="PFNETAPP"} 62851645.44
+	# HELP tsm_occupancy_reporting_bytes Reporting space occupied
+	# TYPE tsm_occupancy_reporting_bytes gauge
+	tsm_occupancy_reporting_bytes{filespace="/fs/project",nodename="PROJECT",storagepool="PTGPFS"} 1789467069691986
+	tsm_occupancy_reporting_bytes{filespace="/home",nodename="NETAPPUSER",storagepool="PFNETAPP"} 60817408
+	tsm_occupancy_reporting_bytes{filespace="/usr/exploit",nodename="MORGON",storagepool="CLOUDTSMAZ"} 1048576000
 	`
 	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 10 {
-		t.Errorf("Unexpected collection count %d, expected 10", val)
+	} else if val != 13 {
+		t.Errorf("Unexpected collection count %d, expected 13", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_occupancy_files", "tsm_occupancy_logical_bytes", "tsm_occupancy_physical_bytes",
+		"tsm_occupancy_files", "tsm_occupancy_logical_bytes",
+		"tsm_occupancy_physical_bytes", "tsm_occupancy_reporting_bytes",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}

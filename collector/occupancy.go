@@ -39,6 +39,7 @@ var (
 		"NUM_FILES":      "Files",
 		"PHYSICAL_MB":    "Physical",
 		"LOGICAL_MB":     "Logical",
+		"REPORTING_MB":   "Reporting",
 	}
 	occupancyLabelFields = []string{"NODE_NAME", "FILESPACE_NAME", "STGPOOL_NAME"}
 )
@@ -50,14 +51,16 @@ type OccupancyMetric struct {
 	Files           float64
 	Physical        float64
 	Logical         float64
+	Reporting       float64
 }
 
 type OccupancysCollector struct {
-	physical *prometheus.Desc
-	logical  *prometheus.Desc
-	files    *prometheus.Desc
-	target   *config.Target
-	logger   log.Logger
+	physical  *prometheus.Desc
+	logical   *prometheus.Desc
+	reporting *prometheus.Desc
+	files     *prometheus.Desc
+	target    *config.Target
+	logger    log.Logger
 }
 
 func init() {
@@ -70,6 +73,8 @@ func NewOccupancysExporter(target *config.Target, logger log.Logger) Collector {
 			"Physical space occupied", []string{"nodename", "filespace", "storagepool"}, nil),
 		logical: prometheus.NewDesc(prometheus.BuildFQName(namespace, "occupancy", "logical_bytes"),
 			"Logical space occupied", []string{"nodename", "filespace", "storagepool"}, nil),
+		reporting: prometheus.NewDesc(prometheus.BuildFQName(namespace, "occupancy", "reporting_bytes"),
+			"Reporting space occupied", []string{"nodename", "filespace", "storagepool"}, nil),
 		files: prometheus.NewDesc(prometheus.BuildFQName(namespace, "occupancy", "files"),
 			"Number of files", []string{"nodename", "filespace", "storagepool"}, nil),
 		target: target,
@@ -80,6 +85,7 @@ func NewOccupancysExporter(target *config.Target, logger log.Logger) Collector {
 func (c *OccupancysCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.physical
 	ch <- c.logical
+	ch <- c.reporting
 	ch <- c.files
 }
 
@@ -102,6 +108,9 @@ func (c *OccupancysCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 		if !math.IsNaN(m.Logical) {
 			ch <- prometheus.MustNewConstMetric(c.logical, prometheus.GaugeValue, m.Logical, m.NodeName, m.FilespaceName, m.StoragePoolName)
+		}
+		if !math.IsNaN(m.Reporting) {
+			ch <- prometheus.MustNewConstMetric(c.reporting, prometheus.GaugeValue, m.Reporting, m.NodeName, m.FilespaceName, m.StoragePoolName)
 		}
 		if !math.IsNaN(m.Files) {
 			ch <- prometheus.MustNewConstMetric(c.files, prometheus.GaugeValue, m.Files, m.NodeName, m.FilespaceName, m.StoragePoolName)
