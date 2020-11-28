@@ -31,7 +31,7 @@
 * Produce a metric for each possible drive state with `tsm_drive_state_info`
 * Improved logging when parse errors are encountered
 * Ensure `tsm_libvolume_media{status="private"}` and `tsm_libvolume_media{status="scratch"}` are always present for each mediatype/library combination
-* Add `tsm_occupancy_reporting_bytes` to `occupancy` collector
+* Add `tsm_occupancy_reporting_bytes` metric
 
 ## 0.6.0 / 2020-11-06
 
