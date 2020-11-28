@@ -29,18 +29,13 @@ import (
 )
 
 var (
-	// QUERY: SELECT DEVCLASS,PCT_UTILIZED,POOLTYPE,STGPOOL_NAME,STG_TYPE FROM stgpools
+	// QUERY: SELECT DEVCLASS,EST_CAPACITY_MB,LOCAL_EST_CAPACITY_MB,LOCAL_PCT_LOGICAL,LOCAL_PCT_UTILIZED,PCT_LOGICAL,PCT_UTILIZED,POOLTYPE,STGPOOL_NAME,STG_TYPE,TOTAL_CLOUD_SPACE_MB,USED_CLOUD_SPACE_MB FROM stgpools
 	mockedStoragePoolStdout = `
 Data,to,ignore
-DISK,0.0,PRIMARY,ARCHIVEPOOL,DEVCLASS
-DCFILEE,41.8,PRIMARY,EPFESS,DEVCLASS
-DCULT7,42.6,PRIMARY,PTGPFS,DEVCLASS
-,,PRIMARY,CLOUDTSMAZ,CLOUD
-`
-	mockedStoragePoolStdoutComma = `
-DISK,"0,0",PRIMARY,ARCHIVEPOOL,DEVCLASS
-DCFILEE,"41,8",PRIMARY,EPFESS,DEVCLASS
-DCULT7,"42,6",PRIMARY,PTGPFS,DEVCLASS
+DISK,0.0,,,,100.0,0.0,PRIMARY,ARCHIVEPOOL,DEVCLASS,,
+DCFILEE,25608540.0,,,,100.0,41.8,PRIMARY,EPFESS,DEVCLASS,,
+DCULT7,3199882345.5,,,,99.7,42.6,PRIMARY,PTGPFS,DEVCLASS,,
+,,"897775,0","100,0","0,0",,,PRIMARY,CLOUDTSMAZ,CLOUD,130,128
 `
 )
 
@@ -62,28 +57,10 @@ func TestStoragePoolParse(t *testing.T) {
 	}
 }
 
-func TestStoragePoolParseComma(t *testing.T) {
-	metrics, err := stgpoolsParse(mockedStoragePoolStdoutComma, log.NewNopLogger())
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-		return
-	}
-	if len(metrics) != 3 {
-		t.Errorf("Expected 3 metrics, got %v", len(metrics))
-		return
-	}
-	if val := metrics[0].Name; val != "ARCHIVEPOOL" {
-		t.Errorf("Unexpected name, got %v", val)
-	}
-	if val := metrics[1].PercentUtilized; val != 0.418 {
-		t.Errorf("Unexpected PercentUtilized, got %v", val)
-	}
-}
-
 func TestStoragePoolParseErrors(t *testing.T) {
 	tests := []string{
-		"DISK,foo,PRIMARY,ARCHIVEPOOL,DEVCLASS\n",
-		"DISK,0.0,\"PRIMARY,ARCHIVEPOOL,DEVCLASS",
+		"DISK,0.0,,,,100.0,FOO,PRIMARY,ARCHIVEPOOL,DEVCLASS,,\n",
+		"DISK,0.0,,\",,100.0,0.0,PRIMARY,ARCHIVEPOOL,DEVCLASS,,\n",
 	}
 	for i, out := range tests {
 		_, err := stgpoolsParse(out, log.NewNopLogger())
@@ -101,6 +78,31 @@ func TestStoragePoolCollector(t *testing.T) {
 		return mockedStoragePoolStdout, nil
 	}
 	expected := `
+	# HELP tsm_storage_pool_cloud_total_bytes Storage pool total cloud space
+	# TYPE tsm_storage_pool_cloud_total_bytes gauge
+	tsm_storage_pool_cloud_total_bytes{classname="",pooltype="PRIMARY",storagepool="CLOUDTSMAZ",storagetype="CLOUD"} 136314880
+	# HELP tsm_storage_pool_cloud_used_bytes Storage pool used cloud space
+	# TYPE tsm_storage_pool_cloud_used_bytes gauge
+	tsm_storage_pool_cloud_used_bytes{classname="",pooltype="PRIMARY",storagepool="CLOUDTSMAZ",storagetype="CLOUD"} 134217728
+	# HELP tsm_storage_pool_estimated_capacity_bytes Storage pool estimated capacity
+	# TYPE tsm_storage_pool_estimated_capacity_bytes gauge
+	tsm_storage_pool_estimated_capacity_bytes{classname="DISK",pooltype="PRIMARY",storagepool="ARCHIVEPOOL",storagetype="DEVCLASS"} 0.0
+	tsm_storage_pool_estimated_capacity_bytes{classname="DCFILEE",pooltype="PRIMARY",storagepool="EPFESS",storagetype="DEVCLASS"} 26852500439040
+	tsm_storage_pool_estimated_capacity_bytes{classname="DCULT7",pooltype="PRIMARY",storagepool="PTGPFS",storagetype="DEVCLASS"} 3355319830315008
+	# HELP tsm_storage_pool_local_estimated_capacity_bytes Storage pool local estimated capacity
+	# TYPE tsm_storage_pool_local_estimated_capacity_bytes gauge
+	tsm_storage_pool_local_estimated_capacity_bytes{classname="",pooltype="PRIMARY",storagepool="CLOUDTSMAZ",storagetype="CLOUD"} 941385318400
+	# HELP tsm_storage_pool_local_logical_ratio Storage pool local logical occupancy ratio, 0.0-1.0
+	# TYPE tsm_storage_pool_local_logical_ratio gauge
+	tsm_storage_pool_local_logical_ratio{classname="",pooltype="PRIMARY",storagepool="CLOUDTSMAZ",storagetype="CLOUD"} 1.0
+	# HELP tsm_storage_pool_local_utilized_ratio Storage pool local utilized ratio, 0.0-1.0
+	# TYPE tsm_storage_pool_local_utilized_ratio gauge
+	tsm_storage_pool_local_utilized_ratio{classname="",pooltype="PRIMARY",storagepool="CLOUDTSMAZ",storagetype="CLOUD"} 0
+	# HELP tsm_storage_pool_logical_ratio Storage pool logical occupancy ratio, 0.0-1.0
+	# TYPE tsm_storage_pool_logical_ratio gauge
+	tsm_storage_pool_logical_ratio{classname="DISK",pooltype="PRIMARY",storagepool="ARCHIVEPOOL",storagetype="DEVCLASS"} 1.0
+	tsm_storage_pool_logical_ratio{classname="DCFILEE",pooltype="PRIMARY",storagepool="EPFESS",storagetype="DEVCLASS"} 1.0
+	tsm_storage_pool_logical_ratio{classname="DCULT7",pooltype="PRIMARY",storagepool="PTGPFS",storagetype="DEVCLASS"} 0.997
 	# HELP tsm_storage_pool_utilized_ratio Storage pool utilized ratio, 0.0-1.0
 	# TYPE tsm_storage_pool_utilized_ratio gauge
 	tsm_storage_pool_utilized_ratio{classname="DISK",pooltype="PRIMARY",storagepool="ARCHIVEPOOL",storagetype="DEVCLASS"} 0.0
@@ -119,11 +121,14 @@ func TestStoragePoolCollector(t *testing.T) {
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 6 {
-		t.Errorf("Unexpected collection count %d, expected 6", val)
+	} else if val != 17 {
+		t.Errorf("Unexpected collection count %d, expected 17", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
-		"tsm_storage_pool_utilized_ratio",
+		"tsm_storage_pool_cloud_total_bytes", "tsm_storage_pool_cloud_used_bytes",
+		"tsm_storage_pool_estimated_capacity_bytes", "tsm_storage_pool_local_estimated_capacity_bytes",
+		"tsm_storage_pool_local_logical_ratio", "tsm_storage_pool_local_utilized_ratio",
+		"tsm_storage_pool_logical_ratio", "tsm_storage_pool_utilized_ratio",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
