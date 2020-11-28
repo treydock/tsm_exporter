@@ -32,6 +32,14 @@
 * Improved logging when parse errors are encountered
 * Ensure `tsm_libvolume_media{status="private"}` and `tsm_libvolume_media{status="scratch"}` are always present for each mediatype/library combination
 * Add `tsm_occupancy_reporting_bytes` metric
+* Add metrics for `stgpools` collector
+  * `tsm_storage_pool_cloud_total_bytes`
+  * `tsm_storage_pool_cloud_used_bytes`
+  * `tsm_storage_pool_estimated_capacity_bytes`
+  * `tsm_storage_pool_local_estimated_capacity_bytes`
+  * `tsm_storage_pool_local_logical_ratio`
+  * `tsm_storage_pool_local_utilized_ratio`
+  * `tsm_storage_pool_logical_ratio`
 
 ## 0.6.0 / 2020-11-06
 

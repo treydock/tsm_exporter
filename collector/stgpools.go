@@ -33,26 +33,47 @@ var (
 	stgpoolsTimeout        = kingpin.Flag("collector.stgpools.timeout", "Timeout for collecting stgpools information").Default("10").Int()
 	DsmadmcStoragePoolExec = dsmadmcStoragePool
 	stgpoolsMap            = map[string]string{
-		"STGPOOL_NAME": "Name",
-		"POOLTYPE":     "PoolType",
-		"DEVCLASS":     "ClassName",
-		"STG_TYPE":     "StorageType",
-		"PCT_UTILIZED": "PercentUtilized",
+		"STGPOOL_NAME":          "Name",
+		"POOLTYPE":              "PoolType",
+		"DEVCLASS":              "ClassName",
+		"STG_TYPE":              "StorageType",
+		"PCT_LOGICAL":           "PercentLogical",
+		"PCT_UTILIZED":          "PercentUtilized",
+		"EST_CAPACITY_MB":       "EstimatedCapacity",
+		"TOTAL_CLOUD_SPACE_MB":  "TotalCloudSpace",
+		"USED_CLOUD_SPACE_MB":   "UsedCloudSpace",
+		"LOCAL_EST_CAPACITY_MB": "LocalEstimatedCapacity",
+		"LOCAL_PCT_LOGICAL":     "LocalPercentLogical",
+		"LOCAL_PCT_UTILIZED":    "LocalPercentUtilized",
 	}
 )
 
 type StoragePoolMetric struct {
-	Name            string
-	PoolType        string
-	ClassName       string
-	StorageType     string
-	PercentUtilized float64
+	Name                   string
+	PoolType               string
+	ClassName              string
+	StorageType            string
+	PercentLogical         float64
+	PercentUtilized        float64
+	EstimatedCapacity      float64
+	TotalCloudSpace        float64
+	UsedCloudSpace         float64
+	LocalEstimatedCapacity float64
+	LocalPercentLogical    float64
+	LocalPercentUtilized   float64
 }
 
 type StoragePoolCollector struct {
-	PercentUtilized *prometheus.Desc
-	target          *config.Target
-	logger          log.Logger
+	PercentLogical         *prometheus.Desc
+	PercentUtilized        *prometheus.Desc
+	EstimatedCapacity      *prometheus.Desc
+	TotalCloudSpace        *prometheus.Desc
+	UsedCloudSpace         *prometheus.Desc
+	LocalEstimatedCapacity *prometheus.Desc
+	LocalPercentLogical    *prometheus.Desc
+	LocalPercentUtilized   *prometheus.Desc
+	target                 *config.Target
+	logger                 log.Logger
 }
 
 func init() {
@@ -60,16 +81,38 @@ func init() {
 }
 
 func NewStoragePoolExporter(target *config.Target, logger log.Logger) Collector {
+	labels := []string{"storagepool", "pooltype", "classname", "storagetype"}
 	return &StoragePoolCollector{
+		PercentLogical: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "logical_ratio"),
+			"Storage pool logical occupancy ratio, 0.0-1.0", labels, nil),
 		PercentUtilized: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "utilized_ratio"),
-			"Storage pool utilized ratio, 0.0-1.0", []string{"storagepool", "pooltype", "classname", "storagetype"}, nil),
+			"Storage pool utilized ratio, 0.0-1.0", labels, nil),
+		EstimatedCapacity: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "estimated_capacity_bytes"),
+			"Storage pool estimated capacity", labels, nil),
+		TotalCloudSpace: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "cloud_total_bytes"),
+			"Storage pool total cloud space", labels, nil),
+		UsedCloudSpace: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "cloud_used_bytes"),
+			"Storage pool used cloud space", labels, nil),
+		LocalEstimatedCapacity: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "local_estimated_capacity_bytes"),
+			"Storage pool local estimated capacity", labels, nil),
+		LocalPercentLogical: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "local_logical_ratio"),
+			"Storage pool local logical occupancy ratio, 0.0-1.0", labels, nil),
+		LocalPercentUtilized: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "local_utilized_ratio"),
+			"Storage pool local utilized ratio, 0.0-1.0", labels, nil),
 		target: target,
 		logger: logger,
 	}
 }
 
 func (c *StoragePoolCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.PercentLogical
 	ch <- c.PercentUtilized
+	ch <- c.EstimatedCapacity
+	ch <- c.TotalCloudSpace
+	ch <- c.UsedCloudSpace
+	ch <- c.LocalEstimatedCapacity
+	ch <- c.LocalPercentLogical
+	ch <- c.LocalPercentUtilized
 }
 
 func (c *StoragePoolCollector) Collect(ch chan<- prometheus.Metric) {
@@ -86,10 +129,31 @@ func (c *StoragePoolCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, m := range metrics {
-		if math.IsNaN(m.PercentUtilized) {
-			continue
+		labels := []string{m.Name, m.PoolType, m.ClassName, m.StorageType}
+		if !math.IsNaN(m.PercentLogical) {
+			ch <- prometheus.MustNewConstMetric(c.PercentLogical, prometheus.GaugeValue, m.PercentLogical, labels...)
 		}
-		ch <- prometheus.MustNewConstMetric(c.PercentUtilized, prometheus.GaugeValue, m.PercentUtilized, m.Name, m.PoolType, m.ClassName, m.StorageType)
+		if !math.IsNaN(m.PercentUtilized) {
+			ch <- prometheus.MustNewConstMetric(c.PercentUtilized, prometheus.GaugeValue, m.PercentUtilized, labels...)
+		}
+		if !math.IsNaN(m.EstimatedCapacity) {
+			ch <- prometheus.MustNewConstMetric(c.EstimatedCapacity, prometheus.GaugeValue, m.EstimatedCapacity, labels...)
+		}
+		if !math.IsNaN(m.TotalCloudSpace) {
+			ch <- prometheus.MustNewConstMetric(c.TotalCloudSpace, prometheus.GaugeValue, m.TotalCloudSpace, labels...)
+		}
+		if !math.IsNaN(m.UsedCloudSpace) {
+			ch <- prometheus.MustNewConstMetric(c.UsedCloudSpace, prometheus.GaugeValue, m.UsedCloudSpace, labels...)
+		}
+		if !math.IsNaN(m.LocalEstimatedCapacity) {
+			ch <- prometheus.MustNewConstMetric(c.LocalEstimatedCapacity, prometheus.GaugeValue, m.LocalEstimatedCapacity, labels...)
+		}
+		if !math.IsNaN(m.LocalPercentLogical) {
+			ch <- prometheus.MustNewConstMetric(c.LocalPercentLogical, prometheus.GaugeValue, m.LocalPercentLogical, labels...)
+		}
+		if !math.IsNaN(m.LocalPercentUtilized) {
+			ch <- prometheus.MustNewConstMetric(c.LocalPercentUtilized, prometheus.GaugeValue, m.LocalPercentUtilized, labels...)
+		}
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "stgpools")
@@ -142,6 +206,8 @@ func stgpoolsParse(out string, logger log.Logger) ([]StoragePoolMetric, error) {
 				}
 				if strings.Contains(field, "Percent") {
 					val = val / 100
+				} else if strings.HasSuffix(k, "_MB") {
+					val = val * 1024 * 1024
 				}
 				f.SetFloat(val)
 			}
