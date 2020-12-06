@@ -171,7 +171,7 @@ func (c *DBCollector) collect() ([]DBMetric, error) {
 	if err != nil {
 		return nil, err
 	}
-	metrics, err := dbParse(out, c.logger)
+	metrics, err := dbParse(out, c.target, c.logger)
 	return metrics, err
 }
 
@@ -182,7 +182,7 @@ func dsmadmcDB(target *config.Target, ctx context.Context, logger log.Logger) (s
 	return out, err
 }
 
-func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
+func dbParse(out string, target *config.Target, logger log.Logger) ([]DBMetric, error) {
 	var metrics []DBMetric
 	fields := getDBFields()
 	records, err := getRecords(out, logger)
@@ -200,7 +200,7 @@ func dbParse(out string, logger log.Logger) ([]DBMetric, error) {
 			field := dbMap[k]
 			f := s.FieldByName(field)
 			if strings.HasSuffix(k, "_DATE") {
-				t, err := time.Parse(timeFormat, record[i])
+				t, err := parseTime(record[i], target)
 				if err != nil {
 					level.Error(logger).Log("msg", "Error parsing time", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
 					return nil, err

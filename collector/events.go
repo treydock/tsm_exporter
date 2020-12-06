@@ -36,11 +36,15 @@ var (
 type EventMetric struct {
 	name         string
 	notCompleted float64
+	start        float64
+	completed    float64
 	duration     float64
 }
 
 type EventsCollector struct {
 	notCompleted *prometheus.Desc
+	start        *prometheus.Desc
+	completed    *prometheus.Desc
 	duration     *prometheus.Desc
 	target       *config.Target
 	logger       log.Logger
@@ -54,6 +58,10 @@ func NewEventsExporter(target *config.Target, logger log.Logger) Collector {
 	return &EventsCollector{
 		notCompleted: prometheus.NewDesc(prometheus.BuildFQName(namespace, "schedule", "not_completed"),
 			"Number of scheduled events not completed for today", []string{"schedule"}, nil),
+		start: prometheus.NewDesc(prometheus.BuildFQName(namespace, "schedule", "start_timestamp_seconds"),
+			"Start time of the most recent completed scheduled event", []string{"schedule"}, nil),
+		completed: prometheus.NewDesc(prometheus.BuildFQName(namespace, "schedule", "completed_timestamp_seconds"),
+			"Completed time of the most recent completed scheduled event", []string{"schedule"}, nil),
 		duration: prometheus.NewDesc(prometheus.BuildFQName(namespace, "schedule", "duration_seconds"),
 			"Amount of time taken to complete the most recent completed scheduled event", []string{"schedule"}, nil),
 		target: target,
@@ -63,6 +71,8 @@ func NewEventsExporter(target *config.Target, logger log.Logger) Collector {
 
 func (c *EventsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.notCompleted
+	ch <- c.start
+	ch <- c.completed
 	ch <- c.duration
 }
 
@@ -81,7 +91,11 @@ func (c *EventsCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for sched, m := range metrics {
 		ch <- prometheus.MustNewConstMetric(c.notCompleted, prometheus.GaugeValue, m.notCompleted, sched)
-		ch <- prometheus.MustNewConstMetric(c.duration, prometheus.GaugeValue, m.duration, sched)
+		if m.completed != 0 {
+			ch <- prometheus.MustNewConstMetric(c.start, prometheus.GaugeValue, m.start, sched)
+			ch <- prometheus.MustNewConstMetric(c.completed, prometheus.GaugeValue, m.completed, sched)
+			ch <- prometheus.MustNewConstMetric(c.duration, prometheus.GaugeValue, m.duration, sched)
+		}
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "events")
@@ -111,7 +125,7 @@ func (c *EventsCollector) collect() (map[string]EventMetric, error) {
 	if notCompletedErr != nil {
 		return nil, notCompletedErr
 	}
-	metrics, err := eventsParse(completedOut, notCompletedOut, c.logger)
+	metrics, err := eventsParse(completedOut, notCompletedOut, c.target, c.logger)
 	return metrics, err
 }
 
@@ -146,7 +160,7 @@ func dsmadmcEventsNotCompleted(target *config.Target, ctx context.Context, logge
 	return out, err
 }
 
-func eventsParse(completedOut string, notCompletedOut string, logger log.Logger) (map[string]EventMetric, error) {
+func eventsParse(completedOut string, notCompletedOut string, target *config.Target, logger log.Logger) (map[string]EventMetric, error) {
 	metrics := make(map[string]EventMetric)
 	statusCond := []string{"Completed", "Future", "Started", "In Progress", "Pending"}
 	records, err := getRecords(completedOut, logger)
@@ -161,19 +175,21 @@ func eventsParse(completedOut string, notCompletedOut string, logger log.Logger)
 		if _, ok := metrics[sched]; ok {
 			continue
 		}
-		actual_start, err := time.Parse(timeFormat, record[1])
+		start, err := parseTime(record[1], target)
 		if err != nil {
 			level.Error(logger).Log("msg", "Failed to parse actual start time", "time", record[1], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
-		completed, err := time.Parse(timeFormat, record[2])
+		completed, err := parseTime(record[2], target)
 		if err != nil {
 			level.Error(logger).Log("msg", "Failed to parse completed time", "time", record[2], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
-		duration := completed.Sub(actual_start).Seconds()
+		duration := completed.Sub(start).Seconds()
 		var metric EventMetric
 		metric.name = sched
+		metric.start = float64(start.Unix())
+		metric.completed = float64(completed.Unix())
 		metric.duration = duration
 		metrics[sched] = metric
 	}

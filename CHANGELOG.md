@@ -40,6 +40,11 @@
   * `tsm_storage_pool_local_logical_ratio`
   * `tsm_storage_pool_local_utilized_ratio`
   * `tsm_storage_pool_logical_ratio`
+* Add `summary` collector
+* Fix time parsing to be timezone aware, add options to adjust timezone
+* Add metrics to `events` collector
+  * `tsm_schedule_start_timestamp_seconds`
+  * `tsm_schedule_completed_timestamp_seconds`
 
 ## 0.6.0 / 2020-11-06
 

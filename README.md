@@ -35,6 +35,7 @@ events | Collect event duration and number of not completed events | Enabled
 replicationview | Collect metrics about replication | Enabled
 stgpools | Collect storage pool metrics | Enabled
 volumeusage | Collect aggregates of volume counts by node name | Enabled
+summary | Collect backup summary information | Enabled
 
 ## Configuration
 
@@ -53,15 +54,20 @@ targets:
   tsm2.example.com:
     id: somwell
     password: secret
+    timezone: America/New_York
     collectors:
     - status
     - volumes
     - log
     - db
     - volumeusage
+    - summary
     volumeusage_map:
       LTO6: '^E.*'
       LT07: '^F.*'
+    summary_activities:
+    - BACKUP
+    - REPLICATION
 ```
 
 **WARNING**: Due to limitations with Go expect libraries and limitations with how passwords as passed to dsmadmc, 
@@ -86,6 +92,11 @@ The `replicationview` collector can be limited to specific node names via the `r
 
 The `volumeusage` collector can map specific volume names to metric labels via `volumeusage_map` config value.
 The example above will map volumes starting with `E` to be counted as `LTO6` and volumes starting with `F` counted as `LT07`. If no mapping is defined the metrics will just set `volumename="all"` and the metrics will count volumes per node name.
+
+The `summary` collector can have specific activies queried via the `summary_activities` config value. By default
+all activities are queried except `'TAPE MOUNT','EXPIRATION','PROCESS_START','PROCESS_END'` and anything beginning with `SUR_`.
+
+Times are parsed using the timezone of the host running this exporter. If that timezone differs for a TSM host you can use `--config.timezone` flag or set `timezone` configuration for a target, such as `America/New_York`.  The target `timezone` config option takes precedence.
 
 ## Dependencies
 
