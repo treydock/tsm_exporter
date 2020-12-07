@@ -1,10 +1,10 @@
 # TSM Prometheus exporter
 
-[![Build Status](https://circleci.com/gh/treydock/tsm_exporter/tree/master.svg?style=shield)](https://circleci.com/gh/treydock/tsm_exporter)
+[![Build Status](https://circleci.com/gh/treydock/tsm_exporter/tree/main.svg?style=shield)](https://circleci.com/gh/treydock/tsm_exporter)
 [![GitHub release](https://img.shields.io/github/v/release/treydock/tsm_exporter?include_prereleases&sort=semver)](https://github.com/treydock/tsm_exporter/releases/latest)
 ![GitHub All Releases](https://img.shields.io/github/downloads/treydock/tsm_exporter/total)
 [![Go Report Card](https://goreportcard.com/badge/github.com/treydock/tsm_exporter)](https://goreportcard.com/report/github.com/treydock/tsm_exporter)
-[![codecov](https://codecov.io/gh/treydock/tsm_exporter/branch/master/graph/badge.svg)](https://codecov.io/gh/treydock/tsm_exporter)
+[![codecov](https://codecov.io/gh/treydock/tsm_exporter/branch/main/graph/badge.svg)](https://codecov.io/gh/treydock/tsm_exporter)
 
 # TSM Prometheus exporter
 

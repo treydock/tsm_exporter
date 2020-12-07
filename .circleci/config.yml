@@ -45,7 +45,7 @@ workflows:
         - build
         filters:
           branches:
-            only: master
+            only: main
     - prometheus/publish_release:
         context: org-context
         docker_hub_organization: treydock
