@@ -36,11 +36,13 @@ type Target struct {
 	Servername           string            `yaml:"servername"`
 	Id                   string            `yaml:"id"`
 	Password             string            `yaml:"password"`
+	Timezone             string            `yaml:"timezone"`
 	LibraryName          string            `yaml:"library_name"`
 	Schedules            []string          `yaml:"schedules"`
 	ReplicationNodeNames []string          `yaml:"replication_node_names"`
 	Collectors           []string          `yaml:"collectors,omitempty"`
 	VolumeUsageMap       map[string]string `yaml:"volumeusage_map,omitempty"`
+	SummaryActivities    []string          `yaml:"summary_activities,omitempty"`
 }
 
 func (sc *SafeConfig) ReloadConfig(configFile string) error {

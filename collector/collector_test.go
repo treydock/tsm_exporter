@@ -26,6 +26,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
@@ -139,5 +140,42 @@ func TestParseFloat(t *testing.T) {
 		} else if val != test.Output {
 			t.Errorf("Unexpected value in case %v:\nExpected: %v\nGot: %v", i, test.Output, val)
 		}
+	}
+}
+
+func TestParseTime(t *testing.T) {
+	input := "2020-12-05 01:01:26.000000"
+	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
+		t.Fatal(err)
+	}
+	zone := "America/New_York"
+	timezone = &zone
+	if output, err := parseTime(input, &config.Target{}); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if output.Unix() != 1607148086 {
+		t.Errorf("Unexpected value for parsed time, case 1")
+	}
+	if output, err := parseTime(input, &config.Target{Timezone: "America/Mexico_City"}); err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	} else if output.Unix() != 1607151686 {
+		t.Errorf("Unexpected value for parsed time, case 1")
+	}
+}
+
+func TestParseTimeError(t *testing.T) {
+	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
+		t.Fatal(err)
+	}
+	zone := "America/FOO"
+	timezone = &zone
+	input := "2020-12-05 01:01:26.000000"
+	if _, err := parseTime(input, &config.Target{}); err == nil {
+		t.Errorf("Expected error for case 1")
+	}
+	zone = "America/New_York"
+	timezone = &zone
+	input = ""
+	if _, err := parseTime(input, &config.Target{}); err == nil {
+		t.Errorf("Expected error for case 2")
 	}
 }

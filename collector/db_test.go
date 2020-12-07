@@ -40,7 +40,7 @@ Data,to,ignore
 )
 
 func TestDBParse(t *testing.T) {
-	metrics, err := dbParse(mockedDBStdout, log.NewNopLogger())
+	metrics, err := dbParse(mockedDBStdout, &config.Target{}, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -58,7 +58,7 @@ func TestDBParse(t *testing.T) {
 }
 
 func TestDBParseCommas(t *testing.T) {
-	metrics, err := dbParse(mockedDBStdoutComma, log.NewNopLogger())
+	metrics, err := dbParse(mockedDBStdoutComma, &config.Target{}, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -82,7 +82,7 @@ func TestDBParseErrors(t *testing.T) {
 		"\"88.6\"\",TSMDB1,3092796,1453663,foo,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n",
 	}
 	for i, out := range tests {
-		_, err := dbParse(out, log.NewNopLogger())
+		_, err := dbParse(out, &config.Target{}, log.NewNopLogger())
 		if err == nil {
 			t.Errorf("Expected error in test case %d", i)
 		}
@@ -107,7 +107,7 @@ func TestDBCollector(t *testing.T) {
 	# TYPE tsm_db_pages_free gauge
 	# HELP tsm_db_last_backup_timestamp_seconds Time since last backup in epoch
 	# TYPE tsm_db_last_backup_timestamp_seconds gauge
-	tsm_db_last_backup_timestamp_seconds{dbname="TSMDB1"} 1.590135e+09
+	tsm_db_last_backup_timestamp_seconds{dbname="TSMDB1"} 1590149400
 	tsm_db_pages_free{dbname="TSMDB1"} 3092796
 	# HELP tsm_db_pages_total DB total pages
 	# TYPE tsm_db_pages_total gauge
@@ -140,6 +140,8 @@ func TestDBCollector(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="db"} 0
 	`
+	zone := "America/New_York"
+	timezone = &zone
 	w := log.NewSyncWriter(os.Stderr)
 	logger := log.NewLogfmtLogger(w)
 	collector := NewDBExporter(&config.Target{}, logger)

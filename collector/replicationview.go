@@ -136,7 +136,7 @@ func (c *ReplicationViewsCollector) collect() (map[string]ReplicationViewMetric,
 	if notCompletedErr != nil {
 		return nil, notCompletedErr
 	}
-	metrics, err := replicationviewParse(completedOut, notCompletedOut, c.logger)
+	metrics, err := replicationviewParse(completedOut, notCompletedOut, c.target, c.logger)
 	return metrics, err
 }
 
@@ -171,7 +171,7 @@ func dsmadmcReplicationViewsNotCompleted(target *config.Target, ctx context.Cont
 	return out, err
 }
 
-func replicationviewParse(completedOut string, notCompletedOut string, logger log.Logger) (map[string]ReplicationViewMetric, error) {
+func replicationviewParse(completedOut string, notCompletedOut string, target *config.Target, logger log.Logger) (map[string]ReplicationViewMetric, error) {
 	metrics := make(map[string]ReplicationViewMetric)
 	records, err := getRecords(completedOut, logger)
 	if err != nil {
@@ -188,12 +188,12 @@ func replicationviewParse(completedOut string, notCompletedOut string, logger lo
 		if _, ok := metrics[key]; ok {
 			continue
 		}
-		startTime, err := time.Parse(timeFormat, record[2])
+		startTime, err := parseTime(record[2], target)
 		if err != nil {
 			level.Error(logger).Log("msg", "Failed to parse START_TIME", "value", record[2], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
-		endTime, err := time.Parse(timeFormat, record[3])
+		endTime, err := parseTime(record[3], target)
 		if err != nil {
 			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", record[3], "record", strings.Join(record, ","), "err", err)
 			return nil, err

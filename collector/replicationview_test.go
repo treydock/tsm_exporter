@@ -72,7 +72,7 @@ func TestBuildReplicationViewNotCompletedQuery(t *testing.T) {
 }
 
 func TestReplicationViewsParse(t *testing.T) {
-	metrics, err := replicationviewParse(mockReplicationViewCompletedStdout, mockReplicationViewNotCompletedStdout, log.NewNopLogger())
+	metrics, err := replicationviewParse(mockReplicationViewCompletedStdout, mockReplicationViewNotCompletedStdout, &config.Target{}, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -104,7 +104,7 @@ func TestReplicationViewsParseErrors(t *testing.T) {
 		"TEST2DB2,/TEST2CONF,\"2020-03-23\" 00:45:29.000000\",2020-03-23 06:06:45.000000,2,167543418",
 	}
 	for i, out := range tests {
-		_, err := replicationviewParse(out, mockReplicationViewNotCompletedStdout, log.NewNopLogger())
+		_, err := replicationviewParse(out, mockReplicationViewNotCompletedStdout, &config.Target{}, log.NewNopLogger())
 		if err == nil {
 			t.Errorf("Expected error on test case %d", i)
 		}
@@ -113,7 +113,7 @@ func TestReplicationViewsParseErrors(t *testing.T) {
 		"FOO,\"\"/BAR\"",
 	}
 	for i, out := range tests {
-		_, err := replicationviewParse(mockReplicationViewCompletedStdout, out, log.NewNopLogger())
+		_, err := replicationviewParse(mockReplicationViewCompletedStdout, out, &config.Target{}, log.NewNopLogger())
 		if err == nil {
 			t.Errorf("Expected error on test case %d", i)
 		}
@@ -145,8 +145,8 @@ func TestReplicationViewsCollector(t *testing.T) {
 	tsm_replication_duration_seconds{fsname="/BAZ",nodename="BAR"} 0
 	# HELP tsm_replication_end_timestamp_seconds End time of replication
 	# TYPE tsm_replication_end_timestamp_seconds gauge
-	tsm_replication_end_timestamp_seconds{fsname="/TEST2CONF",nodename="TEST2DB2"} 1584943605
-	tsm_replication_end_timestamp_seconds{fsname="/TEST4",nodename="TEST2DB2"} 1584943605
+	tsm_replication_end_timestamp_seconds{fsname="/TEST2CONF",nodename="TEST2DB2"} 1584958005
+	tsm_replication_end_timestamp_seconds{fsname="/TEST4",nodename="TEST2DB2"} 1584958005
 	tsm_replication_end_timestamp_seconds{fsname="/BAR",nodename="FOO"} 0
 	tsm_replication_end_timestamp_seconds{fsname="/BAZ",nodename="BAR"} 0
 	# HELP tsm_replication_not_completed Number of replications not completed for today
@@ -169,11 +169,13 @@ func TestReplicationViewsCollector(t *testing.T) {
 	tsm_replication_replicated_files{fsname="/BAZ",nodename="BAR"} 0
 	# HELP tsm_replication_start_timestamp_seconds Start time of replication
 	# TYPE tsm_replication_start_timestamp_seconds gauge
-	tsm_replication_start_timestamp_seconds{fsname="/TEST2CONF",nodename="TEST2DB2"} 1584924329
-	tsm_replication_start_timestamp_seconds{fsname="/TEST4",nodename="TEST2DB2"} 1584924329
+	tsm_replication_start_timestamp_seconds{fsname="/TEST2CONF",nodename="TEST2DB2"} 1584938729
+	tsm_replication_start_timestamp_seconds{fsname="/TEST4",nodename="TEST2DB2"} 1584938729
 	tsm_replication_start_timestamp_seconds{fsname="/BAR",nodename="FOO"} 0
 	tsm_replication_start_timestamp_seconds{fsname="/BAZ",nodename="BAR"} 0
 	`
+	zone := "America/New_York"
+	timezone = &zone
 	collector := NewReplicationViewsExporter(&config.Target{}, log.NewNopLogger())
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {

@@ -39,6 +39,7 @@ const (
 
 var (
 	dsmLogDir       = kingpin.Flag("path.dsm_log.dir", "Directory to use for DSM_LOG environment variable").Default("/tmp").String()
+	timezone        = kingpin.Flag("config.timezone", "Timezone to use when parsing TSM times, defaults local timezone").Default("").String()
 	execCommand     = exec.CommandContext
 	timeNow         = time.Now
 	collectorState  = make(map[string]bool)
@@ -120,6 +121,24 @@ func parseFloat(v string) (float64, error) {
 	}
 	value, err := strconv.ParseFloat(v, 64)
 	return value, err
+}
+
+func parseTime(v string, target *config.Target) (time.Time, error) {
+	now := time.Now()
+	zone, offset := now.Zone()
+	loc := time.FixedZone(zone, offset)
+	var err error
+	if target.Timezone != "" {
+		loc, err = time.LoadLocation(target.Timezone)
+	} else if *timezone != "" {
+		loc, err = time.LoadLocation(*timezone)
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	t, err := time.ParseInLocation(timeFormat, v, loc)
+	return t, err
 }
 
 func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logger log.Logger) (string, error) {

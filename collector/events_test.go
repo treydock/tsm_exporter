@@ -74,7 +74,7 @@ func TestBuildEventsNotCompletedQuery(t *testing.T) {
 }
 
 func TestEventsParse(t *testing.T) {
-	metrics, err := eventsParse(mockEventCompletedStdout, mockEventNotCompletedStdout, log.NewNopLogger())
+	metrics, err := eventsParse(mockEventCompletedStdout, mockEventNotCompletedStdout, &config.Target{}, log.NewNopLogger())
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -101,7 +101,7 @@ func TestEventsParseErrors(t *testing.T) {
 		"\"FOO,2020-03-20 \"05:09:43.000000\",2020-03-20 05:40:14.000000",
 	}
 	for i, out := range tests {
-		_, err := eventsParse(out, mockEventNotCompletedStdout, log.NewNopLogger())
+		_, err := eventsParse(out, mockEventNotCompletedStdout, &config.Target{}, log.NewNopLogger())
 		if err == nil {
 			t.Errorf("Expected error on test case %d", i)
 		}
@@ -110,7 +110,7 @@ func TestEventsParseErrors(t *testing.T) {
 		"FOO,\"Future\"\"",
 	}
 	for i, out := range tests {
-		_, err := eventsParse(mockEventCompletedStdout, out, log.NewNopLogger())
+		_, err := eventsParse(mockEventCompletedStdout, out, &config.Target{}, log.NewNopLogger())
 		if err == nil {
 			t.Errorf("Expected error on test case %d", i)
 		}
@@ -134,14 +134,19 @@ func TestEventsCollector(t *testing.T) {
     # HELP tsm_exporter_collect_timeout Indicates the collector timed out
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="events"} 0
+	# HELP tsm_schedule_completed_timestamp_seconds Completed time of the most recent completed scheduled event
+	# TYPE tsm_schedule_completed_timestamp_seconds gauge
+	tsm_schedule_completed_timestamp_seconds{schedule="FOO"} 1584870074
 	# HELP tsm_schedule_duration_seconds Amount of time taken to complete the most recent completed scheduled event
 	# TYPE tsm_schedule_duration_seconds gauge
-	tsm_schedule_duration_seconds{schedule="BAR"} 0
 	tsm_schedule_duration_seconds{schedule="FOO"} 1891
     # HELP tsm_schedule_not_completed Number of scheduled events not completed for today
     # TYPE tsm_schedule_not_completed gauge
     tsm_schedule_not_completed{schedule="BAR"} 2
     tsm_schedule_not_completed{schedule="FOO"} 0
+	# HELP tsm_schedule_start_timestamp_seconds Start time of the most recent completed scheduled event
+	# TYPE tsm_schedule_start_timestamp_seconds gauge
+	tsm_schedule_start_timestamp_seconds{schedule="FOO"} 1584868183
 	`
 	w := log.NewSyncWriter(os.Stderr)
 	logger := log.NewLogfmtLogger(w)
@@ -149,10 +154,11 @@ func TestEventsCollector(t *testing.T) {
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 7 {
-		t.Errorf("Unexpected collection count %d, expected 7", val)
+	} else if val != 8 {
+		t.Errorf("Unexpected collection count %d, expected 8", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
+		"tsm_schedule_start_timestamp_seconds", "tsm_schedule_completed_timestamp_seconds",
 		"tsm_schedule_not_completed", "tsm_schedule_duration_seconds",
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
