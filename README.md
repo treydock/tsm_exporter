@@ -192,3 +192,9 @@ The following example assumes this exporter is running on the Prometheus server 
   - targets:
     - localhost:9310
 ```
+
+## Grafana Dashboard
+
+An example Grafana dashboard can be found here: https://grafana.com/grafana/dashboards/14054
+
+The dashboard can also be found at [grafana/tsm.json](grafana/tsm.json)
