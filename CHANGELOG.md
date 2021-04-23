@@ -3,6 +3,7 @@
 ### Changes
 
 * Update to Go 1.16
+* Update Go module dependencies
 
 ## 1.0.0 / 2021-04-23
 
