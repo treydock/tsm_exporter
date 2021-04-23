@@ -1,6 +1,6 @@
 module github.com/treydock/tsm_exporter
 
-go 1.13
+go 1.16
 
 require (
 	github.com/go-kit/kit v0.10.0
