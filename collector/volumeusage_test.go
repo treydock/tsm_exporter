@@ -30,13 +30,11 @@ import (
 var (
 	mockVolumeUsageStdout = `
 Ignore
-NETAPPUSER2,F00665L7
-NETAPPUSER2,F00665L7
-NETAPPUSER2,F00665L7
-NETAPPUSER2,E00665L7
-ESS2_ENC,E00168L6
-ESS2_ENC,E00170L6
-ESS2_ENC,/fs/diskpool/sp02/ess/vol51
+F00665L7,NETAPPUSER2
+E00665L7,NETAPPUSER2
+E00168L6,ESS2_ENC
+E00170L6,ESS2_ENC
+/fs/diskpool/sp02/ess/vol51,ESS2_ENC
 `
 )
 
@@ -112,7 +110,7 @@ func TestVolumeUsagesCollector(t *testing.T) {
 	# TYPE tsm_volume_usage gauge
 	tsm_volume_usage{nodename="ESS2_ENC",volumename="LTO6"} 2
 	tsm_volume_usage{nodename="NETAPPUSER2",volumename="LTO6"} 1
-	tsm_volume_usage{nodename="NETAPPUSER2",volumename="LTO7"} 3
+	tsm_volume_usage{nodename="NETAPPUSER2",volumename="LTO7"} 1
 	`
 	target := &config.Target{VolumeUsageMap: map[string]string{
 		"LTO6": "^E",
