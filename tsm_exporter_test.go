@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kit/kit/log"
+	"github.com/go-kit/log"
 	"github.com/treydock/tsm_exporter/collector"
 	"github.com/treydock/tsm_exporter/config"
 	"gopkg.in/alecthomas/kingpin.v2"

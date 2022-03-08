@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kit/kit/log"
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 	"gopkg.in/alecthomas/kingpin.v2"
