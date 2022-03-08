@@ -1,3 +1,9 @@
+## 1.2.1 / 2022-03-08
+
+### Changes
+
+* Avoid duplicates with volumeusage query (#41)
+
 ## 1.2.0 / 2022-03-08
 
 ### Changes
