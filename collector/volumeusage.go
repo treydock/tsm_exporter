@@ -94,7 +94,7 @@ func (c *VolumeUsagesCollector) collect() ([]VolumeUsageMetric, error) {
 }
 
 func dsmadmcVolumeUsages(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	query := "SELECT NODE_NAME,VOLUME_NAME FROM volumeusage"
+	query := "SELECT DISTINCT VOLUME_NAME,NODE_NAME FROM volumeusage"
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
@@ -110,7 +110,7 @@ func volumeusageParse(out string, target *config.Target, logger log.Logger) ([]V
 		if len(record) != 2 {
 			continue
 		}
-		nodeVolumes[record[0]] = append(nodeVolumes[record[0]], record[1])
+		nodeVolumes[record[1]] = append(nodeVolumes[record[1]], record[0])
 	}
 	for nodename, volumes := range nodeVolumes {
 		var metric VolumeUsageMetric
