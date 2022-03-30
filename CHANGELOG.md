@@ -1,3 +1,9 @@
+## 1.2.2 / 2022-03-30
+
+### Changes
+
+* Do not error if LAST_BACKUP_DATE is empty (#44)
+
 ## 1.2.1 / 2022-03-08
 
 ### Changes
