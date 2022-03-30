@@ -37,6 +37,9 @@ Data,to,ignore
 	mockedDBStdoutComma = `
 "99,8",TSMDB1,14716,52426,2020-11-26 06:55:13.000000,"99,5",0,104779659176,11102498,221184,11095514,168693,11080798
 `
+	mockedDBStdoutNoBackup = `
+99.1,TSMDB1,55028,994304,,85.7,0,2763284,139268,996147,138492,1600,83464
+`
 )
 
 func TestDBParse(t *testing.T) {
@@ -54,6 +57,18 @@ func TestDBParse(t *testing.T) {
 	}
 	if val := metrics[0].BuffHitRatio; fmt.Sprintf("%.3f", val) != "0.886" {
 		t.Errorf("Unexpected BuffHitRatio, got %v", val)
+	}
+	metrics, err = dbParse(mockedDBStdoutNoBackup, &config.Target{}, log.NewNopLogger())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
+	if len(metrics) != 1 {
+		t.Errorf("Expected 1 metrics, got %v", len(metrics))
+		return
+	}
+	if val := metrics[0].LastBackup; val != 0 {
+		t.Errorf("Unexpected LastBackup, got %v", val)
 	}
 }
 

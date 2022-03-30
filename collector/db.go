@@ -200,6 +200,9 @@ func dbParse(out string, target *config.Target, logger log.Logger) ([]DBMetric, 
 			field := dbMap[k]
 			f := s.FieldByName(field)
 			if strings.HasSuffix(k, "_DATE") {
+				if record[i] == "" {
+					continue
+				}
 				t, err := parseTime(record[i], target)
 				if err != nil {
 					level.Error(logger).Log("msg", "Error parsing time", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
