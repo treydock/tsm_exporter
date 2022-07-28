@@ -66,13 +66,9 @@ FOO,Future
 BAR,Not Started
 BAR,Not Started
 `
-	mockReplicationViewCompletedStdout = `
+	mockReplicationViewStdout = `
 TEST2DB2,/TEST2CONF,2020-03-23 00:45:29.000000,2020-03-23 06:06:45.000000,2,167543418
 TEST2DB2,/TEST4,2020-03-23 00:45:29.000000,2020-03-23 06:06:45.000000,2,1052637876956
-`
-	mockReplicationViewNotCompletedStdout = `
-FOO,/BAR
-BAR,/BAZ
 `
 )
 
@@ -118,11 +114,8 @@ func TestMetricsHandler(t *testing.T) {
 	collector.DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockEventNotCompletedStdout, nil
 	}
-	collector.DsmadmcReplicationViewsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockReplicationViewCompletedStdout, nil
-	}
-	collector.DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockReplicationViewNotCompletedStdout, nil
+	collector.DsmadmcReplicationViewExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockReplicationViewStdout, nil
 	}
 	body, err := queryExporter("target=tsm1.example.com", http.StatusOK)
 	if err != nil {
@@ -158,11 +151,8 @@ func TestMetricsHandlerCollectorsDefined(t *testing.T) {
 	collector.DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
 		return mockEventNotCompletedStdout, nil
 	}
-	collector.DsmadmcReplicationViewsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockReplicationViewCompletedStdout, nil
-	}
-	collector.DsmadmcReplicationViewsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-		return mockReplicationViewNotCompletedStdout, nil
+	collector.DsmadmcReplicationViewExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+		return mockReplicationViewStdout, nil
 	}
 	body, err := queryExporter("target=tsm2.example.com", http.StatusOK)
 	if err != nil {
