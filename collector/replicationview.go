@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-kit/log"
@@ -28,9 +27,8 @@ import (
 )
 
 var (
-	replicationviewTimeout                  = kingpin.Flag("collector.replicationview.timeout", "Timeout for collecting replicationview information").Default("5").Int()
-	DsmadmcReplicationViewsCompletedExec    = dsmadmcReplicationViewsCompleted
-	DsmadmcReplicationViewsNotCompletedExec = dsmadmcReplicationViewsNotCompleted
+	replicationviewTimeout     = kingpin.Flag("collector.replicationview.timeout", "Timeout for collecting replicationview information").Default("5").Int()
+	DsmadmcReplicationViewExec = dsmadmcReplicationView
 )
 
 type ReplicationViewMetric struct {
@@ -38,56 +36,61 @@ type ReplicationViewMetric struct {
 	FsName          string
 	StartTime       float64
 	EndTime         float64
-	NotCompleted    float64
 	Duration        float64
 	ReplicatedBytes float64
 	ReplicatedFiles float64
+	CompState       string
 }
 
-type ReplicationViewsCollector struct {
-	NotCompleted    *prometheus.Desc
-	StartTime       *prometheus.Desc
-	EndTime         *prometheus.Desc
-	Duration        *prometheus.Desc
-	ReplicatedBytes *prometheus.Desc
-	ReplicatedFiles *prometheus.Desc
-	target          *config.Target
-	logger          log.Logger
+type ReplicationViewCollector struct {
+	StartTime                 *prometheus.Desc
+	StartTimeIncomplete       *prometheus.Desc
+	EndTime                   *prometheus.Desc
+	Duration                  *prometheus.Desc
+	ReplicatedBytes           *prometheus.Desc
+	ReplicatedFiles           *prometheus.Desc
+	ReplicatedFilesIncomplete *prometheus.Desc
+	target                    *config.Target
+	logger                    log.Logger
 }
 
 func init() {
-	registerCollector("replicationview", true, NewReplicationViewsExporter)
+	registerCollector("replicationview", true, NewReplicationViewExporter)
 }
 
-func NewReplicationViewsExporter(target *config.Target, logger log.Logger) Collector {
-	return &ReplicationViewsCollector{
-		NotCompleted: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "not_completed"),
-			"Number of replications not completed for today", []string{"nodename", "fsname"}, nil),
+func NewReplicationViewExporter(target *config.Target, logger log.Logger) Collector {
+	labels := []string{"nodename", "fsname"}
+	return &ReplicationViewCollector{
 		StartTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "start_timestamp_seconds"),
-			"Start time of replication", []string{"nodename", "fsname"}, nil),
+			"Start time of replication", labels, nil),
+		StartTimeIncomplete: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "incomplete_start_timestamp_seconds"),
+			"Start time of incomplete replication", labels, nil),
 		EndTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "end_timestamp_seconds"),
-			"End time of replication", []string{"nodename", "fsname"}, nil),
+			"End time of replication", labels, nil),
 		Duration: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "duration_seconds"),
-			"Amount of time taken to complete the most recent replication", []string{"nodename", "fsname"}, nil),
+			"Amount of time taken to complete the most recent replication", labels, nil),
 		ReplicatedBytes: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "replicated_bytes"),
-			"Amount of data replicated in bytes", []string{"nodename", "fsname"}, nil),
+			"Amount of data replicated in bytes", labels, nil),
 		ReplicatedFiles: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "replicated_files"),
-			"Number of files replicated", []string{"nodename", "fsname"}, nil),
+			"Number of files replicated", labels, nil),
+		ReplicatedFilesIncomplete: prometheus.NewDesc(prometheus.BuildFQName(namespace, "replication", "incomplete_replicated_files"),
+			"Number of files replicated for incomplete", labels, nil),
 		target: target,
 		logger: logger,
 	}
 }
 
-func (c *ReplicationViewsCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.NotCompleted
+func (c *ReplicationViewCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.StartTime
+	ch <- c.StartTimeIncomplete
 	ch <- c.EndTime
 	ch <- c.Duration
 	ch <- c.ReplicatedBytes
 	ch <- c.ReplicatedFiles
+	ch <- c.ReplicatedFilesIncomplete
 }
 
-func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
+func (c *ReplicationViewCollector) Collect(ch chan<- prometheus.Metric) {
 	level.Debug(c.logger).Log("msg", "Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
@@ -101,12 +104,16 @@ func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, m := range metrics {
-		ch <- prometheus.MustNewConstMetric(c.NotCompleted, prometheus.GaugeValue, m.NotCompleted, m.NodeName, m.FsName)
-		ch <- prometheus.MustNewConstMetric(c.StartTime, prometheus.GaugeValue, m.StartTime, m.NodeName, m.FsName)
-		ch <- prometheus.MustNewConstMetric(c.EndTime, prometheus.GaugeValue, m.EndTime, m.NodeName, m.FsName)
-		ch <- prometheus.MustNewConstMetric(c.Duration, prometheus.GaugeValue, m.Duration, m.NodeName, m.FsName)
-		ch <- prometheus.MustNewConstMetric(c.ReplicatedBytes, prometheus.GaugeValue, m.ReplicatedBytes, m.NodeName, m.FsName)
-		ch <- prometheus.MustNewConstMetric(c.ReplicatedFiles, prometheus.GaugeValue, m.ReplicatedFiles, m.NodeName, m.FsName)
+		if m.CompState == "INCOMPLETE" {
+			ch <- prometheus.MustNewConstMetric(c.StartTimeIncomplete, prometheus.GaugeValue, m.StartTime, m.NodeName, m.FsName)
+			ch <- prometheus.MustNewConstMetric(c.ReplicatedFilesIncomplete, prometheus.GaugeValue, m.ReplicatedFiles, m.NodeName, m.FsName)
+		} else {
+			ch <- prometheus.MustNewConstMetric(c.StartTime, prometheus.GaugeValue, m.StartTime, m.NodeName, m.FsName)
+			ch <- prometheus.MustNewConstMetric(c.EndTime, prometheus.GaugeValue, m.EndTime, m.NodeName, m.FsName)
+			ch <- prometheus.MustNewConstMetric(c.Duration, prometheus.GaugeValue, m.Duration, m.NodeName, m.FsName)
+			ch <- prometheus.MustNewConstMetric(c.ReplicatedBytes, prometheus.GaugeValue, m.ReplicatedBytes, m.NodeName, m.FsName)
+			ch <- prometheus.MustNewConstMetric(c.ReplicatedFiles, prometheus.GaugeValue, m.ReplicatedFiles, m.NodeName, m.FsName)
+		}
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "replicationview")
@@ -114,77 +121,46 @@ func (c *ReplicationViewsCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collectDuration, prometheus.GaugeValue, time.Since(collectTime).Seconds(), "replicationview")
 }
 
-func (c *ReplicationViewsCollector) collect() (map[string]ReplicationViewMetric, error) {
+func (c *ReplicationViewCollector) collect() (map[string]ReplicationViewMetric, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*replicationviewTimeout)*time.Second)
 	defer cancel()
-	var completedOut, notCompletedOut string
-	var completedErr, notCompletedErr error
-	wg := &sync.WaitGroup{}
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		completedOut, completedErr = DsmadmcReplicationViewsCompletedExec(c.target, ctx, c.logger)
-	}()
-	go func() {
-		defer wg.Done()
-		notCompletedOut, notCompletedErr = DsmadmcReplicationViewsNotCompletedExec(c.target, ctx, c.logger)
-	}()
-	wg.Wait()
-	if completedErr != nil {
-		return nil, completedErr
+	out, err := DsmadmcReplicationViewExec(c.target, ctx, c.logger)
+	if err != nil {
+		return nil, err
 	}
-	if notCompletedErr != nil {
-		return nil, notCompletedErr
-	}
-	metrics, err := replicationviewParse(completedOut, notCompletedOut, c.target, c.logger)
+	metrics, err := replicationviewParse(out, c.target, c.logger)
 	return metrics, err
 }
 
-func buildReplicationViewCompletedQuery(target *config.Target) string {
-	query := "SELECT NODE_NAME, FSNAME, START_TIME, END_TIME, TOTFILES_REPLICATED, TOTBYTES_REPLICATED FROM replicationview WHERE"
+func buildReplicationViewQuery(target *config.Target) string {
+	query := "SELECT NODE_NAME, FSNAME, START_TIME, END_TIME, TOTFILES_REPLICATED, TOTBYTES_REPLICATED, COMP_STATE FROM replicationview"
 	if target.ReplicationNodeNames != nil {
-		query = query + fmt.Sprintf(" NODE_NAME IN (%s) AND", buildInFilter(target.ReplicationNodeNames))
+		query = query + fmt.Sprintf(" WHERE NODE_NAME IN (%s)", buildInFilter(target.ReplicationNodeNames))
 	}
-	query = query + " COMP_STATE = 'COMPLETE' ORDER BY END_TIME DESC"
+	query = query + " ORDER BY END_TIME DESC"
 	return query
 }
 
-func dsmadmcReplicationViewsCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	out, err := dsmadmcQuery(target, buildReplicationViewCompletedQuery(target), ctx, logger)
+func dsmadmcReplicationView(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	out, err := dsmadmcQuery(target, buildReplicationViewQuery(target), ctx, logger)
 	return out, err
 }
 
-func buildReplicationViewNotCompletedQuery(target *config.Target) string {
-	query := "SELECT NODE_NAME, FSNAME FROM replicationview WHERE"
-	if target.ReplicationNodeNames != nil {
-		query = query + fmt.Sprintf(" NODE_NAME IN (%s) AND", buildInFilter(target.ReplicationNodeNames))
-	}
-	now := timeNow().Local()
-	today := now.Format("2006-01-02")
-	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
-	query = query + fmt.Sprintf(" COMP_STATE <> 'COMPLETE' AND DATE(START_TIME) BETWEEN '%s' AND '%s'", yesterday, today)
-	return query
-}
-
-func dsmadmcReplicationViewsNotCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	out, err := dsmadmcQuery(target, buildReplicationViewNotCompletedQuery(target), ctx, logger)
-	return out, err
-}
-
-func replicationviewParse(completedOut string, notCompletedOut string, target *config.Target, logger log.Logger) (map[string]ReplicationViewMetric, error) {
+func replicationviewParse(out string, target *config.Target, logger log.Logger) (map[string]ReplicationViewMetric, error) {
 	metrics := make(map[string]ReplicationViewMetric)
-	records, err := getRecords(completedOut, logger)
+	records, err := getRecords(out, logger)
 	if err != nil {
 		return nil, err
 	}
 	for _, record := range records {
-		if len(record) != 6 {
+		if len(record) != 7 {
 			continue
 		}
 		var metric ReplicationViewMetric
 		nodeName := record[0]
 		fsName := record[1]
-		key := fmt.Sprintf("%s-%s", nodeName, fsName)
+		compState := record[6]
+		key := fmt.Sprintf("%s-%s-%s", nodeName, fsName, compState)
 		if _, ok := metrics[key]; ok {
 			continue
 		}
@@ -215,27 +191,7 @@ func replicationviewParse(completedOut string, notCompletedOut string, target *c
 		metric.Duration = endTime.Sub(startTime).Seconds()
 		metric.ReplicatedFiles = replicatedFiles
 		metric.ReplicatedBytes = replicatedBytes
-		metrics[key] = metric
-	}
-	records, err = getRecords(notCompletedOut, logger)
-	if err != nil {
-		return nil, err
-	}
-	for _, record := range records {
-		if len(record) != 2 {
-			continue
-		}
-		var metric ReplicationViewMetric
-		nodeName := record[0]
-		fsName := record[1]
-		key := fmt.Sprintf("%s-%s", nodeName, fsName)
-		if m, ok := metrics[key]; ok {
-			metric = m
-		} else {
-			metric.NodeName = nodeName
-			metric.FsName = fsName
-		}
-		metric.NotCompleted++
+		metric.CompState = compState
 		metrics[key] = metric
 	}
 	return metrics, nil
