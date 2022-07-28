@@ -1,3 +1,12 @@
+## 2.0.0-rc.0 / 2022-07-28
+
+### Changes
+
+* Replication refactor (#45)
+  * Add metric tsm_replication_incomplete_start_timestamp_seconds
+  * Add metric tsm_replication_incomplete_replicated_files
+  * Remove metric tsm_replication_not_completed
+
 ## 1.2.2 / 2022-03-30
 
 ### Changes
