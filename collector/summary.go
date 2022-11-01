@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-kit/log"
@@ -32,18 +33,24 @@ var (
 )
 
 type SummaryMetric struct {
-	activity string
-	entity   string
-	schedule string
-	endTime  float64
-	bytes    float64
+	activity  string
+	entity    string
+	schedule  string
+	volume    string
+	drive     string
+	startTime float64
+	endTime   float64
+	bytes     float64
 }
 
 type SummaryCollector struct {
-	endTime *prometheus.Desc
-	bytes   *prometheus.Desc
-	target  *config.Target
-	logger  log.Logger
+	startTime          *prometheus.Desc
+	endTime            *prometheus.Desc
+	bytes              *prometheus.Desc
+	tapeMountStartTime *prometheus.Desc
+	tapeMountEndTime   *prometheus.Desc
+	target             *config.Target
+	logger             log.Logger
 }
 
 func init() {
@@ -52,11 +59,18 @@ func init() {
 
 func NewSummaryExporter(target *config.Target, logger log.Logger) Collector {
 	labels := []string{"activity", "entity", "schedule"}
+	tapeMountLabels := []string{"volume", "drive"}
 	return &SummaryCollector{
+		startTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "summary", "start_timestamp_seconds"),
+			"Start time of activity", labels, nil),
 		endTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "summary", "end_timestamp_seconds"),
-			"End time of last backup", labels, nil),
+			"End time of activity", labels, nil),
 		bytes: prometheus.NewDesc(prometheus.BuildFQName(namespace, "summary", "bytes"),
-			"Amount of data backed up in last 24 hours", labels, nil),
+			"Amount of data for activity, in last 24 hours", labels, nil),
+		tapeMountStartTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "tape_mount", "start_timestamp_seconds"),
+			"Start time of activity", tapeMountLabels, nil),
+		tapeMountEndTime: prometheus.NewDesc(prometheus.BuildFQName(namespace, "tape_mount", "end_timestamp_seconds"),
+			"End time of activity", tapeMountLabels, nil),
 		target: target,
 		logger: logger,
 	}
@@ -82,8 +96,15 @@ func (c *SummaryCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for _, m := range metrics {
 		labels := []string{m.activity, m.entity, m.schedule}
-		ch <- prometheus.MustNewConstMetric(c.endTime, prometheus.GaugeValue, m.endTime, labels...)
-		ch <- prometheus.MustNewConstMetric(c.bytes, prometheus.GaugeValue, m.bytes, labels...)
+		if m.activity == "TAPE MOUNT" {
+			labels = []string{m.volume, m.drive}
+			ch <- prometheus.MustNewConstMetric(c.tapeMountStartTime, prometheus.GaugeValue, m.startTime, labels...)
+			ch <- prometheus.MustNewConstMetric(c.tapeMountEndTime, prometheus.GaugeValue, m.endTime, labels...)
+		} else {
+			ch <- prometheus.MustNewConstMetric(c.startTime, prometheus.GaugeValue, m.startTime, labels...)
+			ch <- prometheus.MustNewConstMetric(c.endTime, prometheus.GaugeValue, m.endTime, labels...)
+			ch <- prometheus.MustNewConstMetric(c.bytes, prometheus.GaugeValue, m.bytes, labels...)
+		}
 	}
 
 	ch <- prometheus.MustNewConstMetric(collectError, prometheus.GaugeValue, float64(errorMetric), "summary")
@@ -94,38 +115,73 @@ func (c *SummaryCollector) Collect(ch chan<- prometheus.Metric) {
 func (c *SummaryCollector) collect() (map[string]SummaryMetric, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*summaryTimeout)*time.Second)
 	defer cancel()
-	out, err := DsmadmcSummaryExec(c.target, ctx, c.logger)
-	if err != nil {
-		return nil, err
+	var summaryOut, tapeMountOut string
+	var summaryErr, tapeMountErr error
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		summaryOut, summaryErr = DsmadmcSummaryExec(c.target, false, ctx, c.logger)
+	}()
+	go func() {
+		defer wg.Done()
+		tapeMountOut, tapeMountErr = DsmadmcSummaryExec(c.target, true, ctx, c.logger)
+	}()
+	wg.Wait()
+	if summaryErr != nil {
+		return nil, summaryErr
 	}
-	metrics, err := summaryParse(out, c.target, c.logger)
+	if tapeMountErr != nil {
+		return nil, tapeMountErr
+	}
+	metrics, err := summaryParse(summaryOut, tapeMountOut, c.target, c.logger)
 	return metrics, err
 }
 
 func buildSummaryQuery(target *config.Target) string {
-	query := "SELECT ACTIVITY,ENTITY,SCHEDULE_NAME,SUM(BYTES),MAX(END_TIME) FROM SUMMARY_EXTENDED"
+	query := "SELECT ACTIVITY,ENTITY,SCHEDULE_NAME,SUM(BYTES),MIN(START_TIME),MAX(END_TIME) FROM SUMMARY_EXTENDED"
 	if target.SummaryActivities != nil {
 		query = query + fmt.Sprintf(" WHERE ACTIVITY IN (%s)", buildInFilter(target.SummaryActivities))
 	} else {
 		query = query + " WHERE ACTIVITY NOT IN ('TAPE MOUNT','EXPIRATION','PROCESS_START','PROCESS_END') AND ACTIVITY NOT LIKE 'SUR_%'"
 	}
-	query = query + " GROUP BY ACTIVITY,ENTITY,SCHEDULE_NAME,DATE(END_TIME) ORDER BY DATE(END_TIME) DESC"
+	query = query + " GROUP BY ACTIVITY,ENTITY,SCHEDULE_NAME,DATE(START_TIME),DATE(END_TIME) ORDER BY DATE(END_TIME) DESC"
 	return query
 }
 
-func dsmadmcSummary(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	out, err := dsmadmcQuery(target, buildSummaryQuery(target), ctx, logger)
+func buildTapeMountQuery() string {
+	now := timeNow().Format(timeFormat)
+	past := timeNow().Add(-time.Hour * 1).Format(timeFormat)
+	query := "SELECT ACTIVITY,VOLUME_NAME,DRIVE_NAME,START_TIME,END_TIME FROM SUMMARY_EXTENDED"
+	query = query + " WHERE ACTIVITY IN ('TAPE MOUNT')"
+	query = query + fmt.Sprintf(" AND END_TIME BETWEEN '%s' AND '%s'", past, now)
+	query = query + " ORDER BY END_TIME DESC"
+	return query
+}
+
+func dsmadmcSummary(target *config.Target, tapeMount bool, ctx context.Context, logger log.Logger) (string, error) {
+	var query string
+	if tapeMount {
+		query = buildTapeMountQuery()
+	} else {
+		query = buildSummaryQuery(target)
+	}
+	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 
-func summaryParse(out string, target *config.Target, logger log.Logger) (map[string]SummaryMetric, error) {
+func summaryParse(summary string, tapeMount string, target *config.Target, logger log.Logger) (map[string]SummaryMetric, error) {
 	metrics := make(map[string]SummaryMetric)
-	records, err := getRecords(out, logger)
+	summaryRecords, err := getRecords(summary, logger)
 	if err != nil {
 		return nil, err
 	}
-	for _, record := range records {
-		if len(record) != 5 {
+	tapeMountRecords, err := getRecords(tapeMount, logger)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range summaryRecords {
+		if len(record) != 6 {
 			continue
 		}
 		activity := record[0]
@@ -145,6 +201,41 @@ func summaryParse(out string, target *config.Target, logger log.Logger) (map[str
 			return nil, err
 		}
 		metric.bytes = bytes
+		startTime, err := parseTime(record[4], target)
+		if err != nil {
+			level.Error(logger).Log("msg", "Failed to parse START_TIME", "value", record[4], "record", strings.Join(record, ","), "err", err)
+			return nil, err
+		}
+		metric.startTime = float64(startTime.Unix())
+		endTime, err := parseTime(record[5], target)
+		if err != nil {
+			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", record[5], "record", strings.Join(record, ","), "err", err)
+			return nil, err
+		}
+		metric.endTime = float64(endTime.Unix())
+		metrics[key] = metric
+	}
+	for _, record := range tapeMountRecords {
+		if len(record) != 5 {
+			continue
+		}
+		activity := record[0]
+		volume := record[1]
+		drive := strings.Split(record[2], " ")[0]
+		key := fmt.Sprintf("%s-%s", drive, volume)
+		if _, ok := metrics[key]; ok {
+			continue
+		}
+		var metric SummaryMetric
+		metric.activity = activity
+		metric.volume = volume
+		metric.drive = drive
+		startTime, err := parseTime(record[3], target)
+		if err != nil {
+			level.Error(logger).Log("msg", "Failed to parse START_TIME", "value", record[3], "record", strings.Join(record, ","), "err", err)
+			return nil, err
+		}
+		metric.startTime = float64(startTime.Unix())
 		endTime, err := parseTime(record[4], target)
 		if err != nil {
 			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", record[4], "record", strings.Join(record, ","), "err", err)
@@ -153,5 +244,6 @@ func summaryParse(out string, target *config.Target, logger log.Logger) (map[str
 		metric.endTime = float64(endTime.Unix())
 		metrics[key] = metric
 	}
+
 	return metrics, nil
 }

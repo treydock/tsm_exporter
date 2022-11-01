@@ -1,3 +1,12 @@
+## 2.1.0-rc.0 / 2022-11-01
+
+### Changes
+
+* Improvements to summary collector
+  * Add metric `tsm_tape_mount_start_timestamp_seconds`
+  * Add metric `tsm_tape_mount_end_timestamp_seconds`
+  * Add metric `tsm_summary_start_timestamp_seconds`
+
 ## 2.0.0-rc.0 / 2022-07-28
 
 ### Changes
