@@ -1,11 +1,16 @@
-## 2.1.0-rc.0 / 2022-11-01
+## 2.0.0 / 2023-05-07
 
 ### Changes
 
-* Improvements to summary collector
+* Update to Go 1.20 and update Go module dependencies (#47)
+* Improvements to summary collector (#46)
   * Add metric `tsm_tape_mount_start_timestamp_seconds`
   * Add metric `tsm_tape_mount_end_timestamp_seconds`
   * Add metric `tsm_summary_start_timestamp_seconds`
+* Replication refactor (#45)
+  * Add metric tsm_replication_incomplete_start_timestamp_seconds
+  * Add metric tsm_replication_incomplete_replicated_files
+  * Remove metric tsm_replication_not_completed
 
 ## 2.0.0-rc.0 / 2022-07-28
 
