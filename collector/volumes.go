@@ -31,23 +31,32 @@ var (
 	volumesTimeout          = kingpin.Flag("collector.volumes.timeout", "Timeout for collecting volumes information").Default("10").Int()
 	volumesClassnameExclude = kingpin.Flag("collector.volumes.classname-exclude", "Regexp of classname of exclude").Default("").String()
 	DsmadmcVolumesExec      = dsmadmcVolumes
+	volumeStatuses          = []string{"EMPTY", "FILLING", "FULL"}
 )
 
 type VolumeMetric struct {
-	name      string
-	classname string
-	access    string
-	utilized  float64
-	capacity  float64
+	name          string
+	classname     string
+	access        string
+	utilized      float64
+	capacity      float64
+	stgpool       string
+	status        string
+	times_mounted float64
+	write_pass    float64
 }
 
 type VolumesCollector struct {
-	unavailable *prometheus.Desc
-	readonly    *prometheus.Desc
-	utilized    *prometheus.Desc
-	capacity    *prometheus.Desc
-	target      *config.Target
-	logger      log.Logger
+	unavailable   *prometheus.Desc
+	readonly      *prometheus.Desc
+	utilized      *prometheus.Desc
+	capacity      *prometheus.Desc
+	stgpool       *prometheus.Desc
+	status        *prometheus.Desc
+	times_mounted *prometheus.Desc
+	write_pass    *prometheus.Desc
+	target        *config.Target
+	logger        log.Logger
 }
 
 func init() {
@@ -64,6 +73,14 @@ func NewVolumesExporter(target *config.Target, logger log.Logger) Collector {
 			"Volume utilized ratio, 0.0-1.0", []string{"volume", "classname"}, nil),
 		capacity: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volume", "estimated_capacity_bytes"),
 			"Volume estimated capacity", []string{"volume", "classname"}, nil),
+		stgpool: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volume", "storage_pool_info"),
+			"Volume storage pool information", []string{"volume", "classname", "stgpool"}, nil),
+		status: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volume", "status_info"),
+			"Volume status information", []string{"volume", "classname", "status"}, nil),
+		times_mounted: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volume", "times_mounted"),
+			"Volume times mounted", []string{"volume", "classname"}, nil),
+		write_pass: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volume", "write_pass"),
+			"Volume write pass", []string{"volume", "classname"}, nil),
 		target: target,
 		logger: logger,
 	}
@@ -74,6 +91,10 @@ func (c *VolumesCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.readonly
 	ch <- c.utilized
 	ch <- c.capacity
+	ch <- c.stgpool
+	ch <- c.status
+	ch <- c.times_mounted
+	ch <- c.write_pass
 }
 
 func (c *VolumesCollector) Collect(ch chan<- prometheus.Metric) {
@@ -104,6 +125,16 @@ func (c *VolumesCollector) Collect(ch chan<- prometheus.Metric) {
 		if !math.IsNaN(m.capacity) {
 			ch <- prometheus.MustNewConstMetric(c.capacity, prometheus.GaugeValue, m.capacity, m.name, m.classname)
 		}
+		ch <- prometheus.MustNewConstMetric(c.stgpool, prometheus.GaugeValue, 1, m.name, m.classname, m.stgpool)
+		for _, s := range volumeStatuses {
+			var status float64
+			if s == m.status {
+				status = 1
+			}
+			ch <- prometheus.MustNewConstMetric(c.status, prometheus.GaugeValue, status, m.name, m.classname, s)
+		}
+		ch <- prometheus.MustNewConstMetric(c.times_mounted, prometheus.GaugeValue, m.times_mounted, m.name, m.classname)
+		ch <- prometheus.MustNewConstMetric(c.write_pass, prometheus.GaugeValue, m.write_pass, m.name, m.classname)
 	}
 	if err == nil {
 		ch <- prometheus.MustNewConstMetric(c.unavailable, prometheus.GaugeValue, unavailable)
@@ -127,7 +158,7 @@ func (c *VolumesCollector) collect() ([]VolumeMetric, error) {
 }
 
 func dsmadmcVolumes(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
-	query := "SELECT access,est_capacity_mb,pct_utilized,devclass_name,volume_name FROM volumes"
+	query := "SELECT access,est_capacity_mb,pct_utilized,devclass_name,volume_name,stgpool_name,status,times_mounted,write_pass FROM volumes"
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
@@ -140,7 +171,7 @@ func volumesParse(out string, logger log.Logger) ([]VolumeMetric, error) {
 		return nil, err
 	}
 	for _, record := range records {
-		if len(record) != 5 {
+		if len(record) != 9 {
 			continue
 		}
 		var metric VolumeMetric
@@ -151,6 +182,8 @@ func volumesParse(out string, logger log.Logger) ([]VolumeMetric, error) {
 			continue
 		}
 		metric.access = record[0]
+		metric.stgpool = record[5]
+		metric.status = record[6]
 		capacity, err := parseFloat(record[1])
 		if err != nil {
 			level.Error(logger).Log("msg", "Error parsing est_capacity_mb", "value", record[1], "record", strings.Join(record, ","), "err", err)
@@ -163,6 +196,18 @@ func volumesParse(out string, logger log.Logger) ([]VolumeMetric, error) {
 			return nil, err
 		}
 		metric.utilized = utilized / 100
+		times_mounted, err := parseFloat(record[7])
+		if err != nil {
+			level.Error(logger).Log("msg", "Error parsing times_mounted", "value", record[7], "record", strings.Join(record, ","), "err", err)
+			return nil, err
+		}
+		metric.times_mounted = times_mounted
+		write_pass, err := parseFloat(record[8])
+		if err != nil {
+			level.Error(logger).Log("msg", "Error parsing write_pass", "value", record[8], "record", strings.Join(record, ","), "err", err)
+			return nil, err
+		}
+		metric.write_pass = write_pass
 		metrics = append(metrics, metric)
 	}
 	return metrics, nil

@@ -30,18 +30,18 @@ import (
 
 var (
 	mockVolumeStdout = `
-READWRITE,512000.0,0.0,DCFILEE,/fs/diskpool/sp02/enc-gpfs/svol49
-READWRITE,2396430.0,100.0,DCULT6E,E00090L6
-READWRITE,9067296.0,43.7,DCULT7,F00397L7
-UNAVAILABLE,8199467.0,68.5,DCULT7,F00640L7
-READONLY,5735346.0,94.6,DCULT7,F00529L7
+READWRITE,512000.0,0.0,DCFILEE,/fs/diskpool/sp02/enc-gpfs/svol49,STGPOOL1,FULL,1,1
+READWRITE,2396430.0,100.0,DCULT6E,E00090L6,STGPOOL2,FILLING,1,1
+READWRITE,9067296.0,43.7,DCULT7,F00397L7,STGPOOL2,FULL,1,1
+UNAVAILABLE,8199467.0,68.5,DCULT7,F00640L7,STGPOOL2,EMPTY,1,1
+READONLY,5735346.0,94.6,DCULT7,F00529L7,STGPOOL3,FULL,1,1
 `
 	mockVolumeStdoutComma = `
-READWRITE,"512000,0","0,0",DCFILEE,/fs/diskpool/sp02/enc-gpfs/svol49
-READWRITE,"2396430,0","100,0",DCULT6E,E00090L6
-READWRITE,"9067296,0","43,7",DCULT7,F00397L7
-UNAVAILABLE,"8199467,0","68,5",DCULT7,F00640L7
-READONLY,"5735346,0","94,6",DCULT7,F00529L7
+READWRITE,"512000,0","0,0",DCFILEE,/fs/diskpool/sp02/enc-gpfs/svol49,STGPOOL1,FULL,1,1
+READWRITE,"2396430,0","100,0",DCULT6E,E00090L6,STGPOOL2,FILLING,1,1
+READWRITE,"9067296,0","43,7",DCULT7,F00397L7,STGPOOL2,FULL,1,1
+UNAVAILABLE,"8199467,0","68,5",DCULT7,F00640L7,STGPOOL2,EMPTY,1,1
+READONLY,"5735346,0","94,6",DCULT7,F00529L7,STGPOOL3,FULL,1,1
 `
 )
 
@@ -75,9 +75,11 @@ func TestVolumesParseComma(t *testing.T) {
 
 func TestVolumesParseError(t *testing.T) {
 	tests := []string{
-		"READWRITE,foo,100.0,DCULT6E,E00090L6\n",
-		"READWRITE,2396430.0,foo,DCULT6E,E00090L6\n",
-		"UNAVAILABLE,\"8199467\",0\",\"68,5\",DCULT7,F00640L7",
+		"READWRITE,foo,100.0,DCULT6E,E00090L6,STGPOOL1,FULL,1,1\n",
+		"READWRITE,123,100.0,DCULT6E,E00090L7,STGPOOL1,FULL,foo,1\n",
+		"READWRITE,123,100.0,DCULT6E,E00090L7,STGPOOL1,FULL,1,foo\n",
+		"READWRITE,2396430.0,foo,DCULT6E,E00090L6,STGPOOL1,FULL,1,1\n",
+		"UNAVAILABLE,\"8199467\",0\",\"68,5\",DCULT7,F00640L7,STGPOOL1,FULL,1,1",
 	}
 	for i, out := range tests {
 		_, err := volumesParse(out, log.NewNopLogger())
@@ -109,12 +111,44 @@ func TestVolumesCollector(t *testing.T) {
 	tsm_volume_estimated_capacity_bytes{classname="DCULT7",volume="F00397L7"} 9507748970496
 	tsm_volume_estimated_capacity_bytes{classname="DCULT7",volume="F00529L7"} 6013946167296
 	tsm_volume_estimated_capacity_bytes{classname="DCULT7",volume="F00640L7"} 8597764308992
+	# HELP tsm_volume_status_info Volume status information
+	# TYPE tsm_volume_status_info gauge
+	tsm_volume_status_info{classname="DCULT6E",status="EMPTY",volume="E00090L6"} 0
+	tsm_volume_status_info{classname="DCULT6E",status="FILLING",volume="E00090L6"} 1
+	tsm_volume_status_info{classname="DCULT6E",status="FULL",volume="E00090L6"} 0
+	tsm_volume_status_info{classname="DCULT7",status="EMPTY",volume="F00397L7"} 0
+	tsm_volume_status_info{classname="DCULT7",status="FILLING",volume="F00397L7"} 0
+	tsm_volume_status_info{classname="DCULT7",status="FULL",volume="F00397L7"} 1
+	tsm_volume_status_info{classname="DCULT7",status="EMPTY",volume="F00529L7"} 0
+	tsm_volume_status_info{classname="DCULT7",status="FILLING",volume="F00529L7"} 0
+	tsm_volume_status_info{classname="DCULT7",status="FULL",volume="F00529L7"} 1
+	tsm_volume_status_info{classname="DCULT7",status="EMPTY",volume="F00640L7"} 1
+	tsm_volume_status_info{classname="DCULT7",status="FILLING",volume="F00640L7"} 0
+	tsm_volume_status_info{classname="DCULT7",status="FULL",volume="F00640L7"} 0
+    # HELP tsm_volume_storage_pool_info Volume storage pool information
+	# TYPE tsm_volume_storage_pool_info gauge
+	tsm_volume_storage_pool_info{classname="DCULT6E",stgpool="STGPOOL2",volume="E00090L6"} 1
+	tsm_volume_storage_pool_info{classname="DCULT7",stgpool="STGPOOL2",volume="F00397L7"} 1
+	tsm_volume_storage_pool_info{classname="DCULT7",stgpool="STGPOOL3",volume="F00529L7"} 1
+	tsm_volume_storage_pool_info{classname="DCULT7",stgpool="STGPOOL2",volume="F00640L7"} 1
+    # HELP tsm_volume_times_mounted Volume times mounted
+	# TYPE tsm_volume_times_mounted gauge
+	tsm_volume_times_mounted{classname="DCULT6E",volume="E00090L6"} 1
+	tsm_volume_times_mounted{classname="DCULT7",volume="F00397L7"} 1
+	tsm_volume_times_mounted{classname="DCULT7",volume="F00529L7"} 1
+	tsm_volume_times_mounted{classname="DCULT7",volume="F00640L7"} 1
 	# HELP tsm_volume_utilized_ratio Volume utilized ratio, 0.0-1.0
 	# TYPE tsm_volume_utilized_ratio gauge
 	tsm_volume_utilized_ratio{classname="DCULT6E",volume="E00090L6"} 1.00
 	tsm_volume_utilized_ratio{classname="DCULT7",volume="F00397L7"} 0.43700000000000006
 	tsm_volume_utilized_ratio{classname="DCULT7",volume="F00529L7"} 0.946
 	tsm_volume_utilized_ratio{classname="DCULT7",volume="F00640L7"} 0.685
+	# HELP tsm_volume_write_pass Volume write pass
+	# TYPE tsm_volume_write_pass gauge
+	tsm_volume_write_pass{classname="DCULT6E",volume="E00090L6"} 1
+	tsm_volume_write_pass{classname="DCULT7",volume="F00397L7"} 1
+	tsm_volume_write_pass{classname="DCULT7",volume="F00529L7"} 1
+	tsm_volume_write_pass{classname="DCULT7",volume="F00640L7"} 1
     # HELP tsm_volumes_readonly Number of readonly volumes
     # TYPE tsm_volumes_readonly gauge
     tsm_volumes_readonly 1
@@ -128,8 +162,8 @@ func TestVolumesCollector(t *testing.T) {
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
-	} else if val != 13 {
-		t.Errorf("Unexpected collection count %d, expected 13", val)
+	} else if val != 37 {
+		t.Errorf("Unexpected collection count %d, expected 37", val)
 	}
 	if err := testutil.GatherAndCompare(gatherers, strings.NewReader(expected),
 		"tsm_volumes_unavailable", "tsm_volumes_readonly", "tsm_volume_estimated_capacity_bytes", "tsm_volume_utilized_ratio",
