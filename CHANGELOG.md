@@ -1,3 +1,13 @@
+## 2.1.0 / 2023-05-17
+
+### Changes
+
+* Add metrics to volumes collector (#48)
+  * tsm_volume_storage_pool_info
+  * tsm_volume_status_info
+  * tsm_volume_times_mounted
+  * tsm_volume_write_pass
+
 ## 2.0.0 / 2023-05-07
 
 ### Changes
