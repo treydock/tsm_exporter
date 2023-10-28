@@ -1,4 +1,5 @@
-nputs": [
+{
+  "inputs": [
     {
       "name": "DS_PROMETHEUS",
       "label": "Prometheus",

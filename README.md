@@ -73,7 +73,7 @@ targets:
 **WARNING**: Due to limitations with Go expect libraries and limitations with how passwords as passed to dsmadmc, 
 this code must pass the configured password via CLI arguments. In testing it appears like dsmadmc strips the password
 after execution but this does not guarantee the password cannot be exposed.
-Take proper precaustions in protecting the host running this exporter.
+Take proper precautions in protecting the host running this exporter.
 
 This exporter could then be queried via one of these two commands below.  The `tsm2.example.com` target will only run the `status`, `volumes`, `log` and `db` collectors.
 
