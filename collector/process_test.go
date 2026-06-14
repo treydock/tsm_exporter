@@ -88,6 +88,7 @@ func TestProcessParseError(t *testing.T) {
 	tests := []string{
 		"100,Replicate Node,foo,0,\n",
 		"100,Replicate Node,123,bar,\n",
+		"'\",100,\",Backup",
 	}
 	for i, out := range tests {
 		_, err := processParse(out, log.NewNopLogger())
