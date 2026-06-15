@@ -16,13 +16,14 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -37,7 +38,7 @@ Ignored
 )
 
 func TestLogParse(t *testing.T) {
-	metrics, err := logParse(mockedLogStdout, log.NewNopLogger())
+	metrics, err := logParse(mockedLogStdout, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -48,7 +49,7 @@ func TestLogParse(t *testing.T) {
 }
 
 func TestLogParseComma(t *testing.T) {
-	metrics, err := logParse(mockedLogStdoutComma, log.NewNopLogger())
+	metrics, err := logParse(mockedLogStdoutComma, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -64,7 +65,7 @@ func TestLogParseErrors(t *testing.T) {
 		"\"32426,00\",\"32768\",00\",\"342,00\"\n",
 	}
 	for i, out := range tests {
-		_, err := logParse(out, log.NewNopLogger())
+		_, err := logParse(out, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error in test case %d", i)
 		}
@@ -75,7 +76,7 @@ func TestLogCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockedLogStdout, nil
 	}
 	expected := `
@@ -95,7 +96,7 @@ func TestLogCollector(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="log"} 0
 	`
-	collector := NewLogExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewLogExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -113,7 +114,7 @@ func TestLogCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -124,7 +125,7 @@ func TestLogCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="log"} 0
 	`
-	collector := NewLogExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewLogExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -142,7 +143,7 @@ func TestLogCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcLogExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -153,7 +154,7 @@ func TestLogCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="log"} 1
 	`
-	collector := NewLogExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewLogExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -174,7 +175,7 @@ func TestDsmadmcLog(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcLog(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcLog(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

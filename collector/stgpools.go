@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"reflect"
 	"sort"
@@ -23,8 +24,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -73,14 +72,14 @@ type StoragePoolCollector struct {
 	LocalPercentLogical    *prometheus.Desc
 	LocalPercentUtilized   *prometheus.Desc
 	target                 *config.Target
-	logger                 log.Logger
+	logger                 *slog.Logger
 }
 
 func init() {
 	registerCollector("stgpools", true, NewStoragePoolExporter)
 }
 
-func NewStoragePoolExporter(target *config.Target, logger log.Logger) Collector {
+func NewStoragePoolExporter(target *config.Target, logger *slog.Logger) Collector {
 	labels := []string{"storagepool", "pooltype", "classname", "storagetype"}
 	return &StoragePoolCollector{
 		PercentLogical: prometheus.NewDesc(prometheus.BuildFQName(namespace, "storage_pool", "logical_ratio"),
@@ -116,7 +115,7 @@ func (c *StoragePoolCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *StoragePoolCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -124,7 +123,7 @@ func (c *StoragePoolCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -172,14 +171,14 @@ func (c *StoragePoolCollector) collect() ([]StoragePoolMetric, error) {
 	return metrics, err
 }
 
-func dsmadmcStoragePool(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcStoragePool(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	fields := getStoragePoolFields()
 	query := fmt.Sprintf("SELECT %s FROM stgpools", strings.Join(fields, ","))
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 
-func stgpoolsParse(out string, logger log.Logger) ([]StoragePoolMetric, error) {
+func stgpoolsParse(out string, logger *slog.Logger) ([]StoragePoolMetric, error) {
 	var metrics []StoragePoolMetric
 	fields := getStoragePoolFields()
 	records, err := getRecords(out, logger)
@@ -201,7 +200,7 @@ func stgpoolsParse(out string, logger log.Logger) ([]StoragePoolMetric, error) {
 			} else {
 				val, err := parseFloat(record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
+					logger.Error("Error parsing value", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
 					return nil, err
 				}
 				if strings.Contains(field, "Percent") {

@@ -16,13 +16,14 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -51,7 +52,7 @@ func TestBuildReplicationViewQuery(t *testing.T) {
 }
 
 func TestReplicationViewParse(t *testing.T) {
-	metrics, err := replicationviewParse(mockReplicationViewStdout, &config.Target{}, log.NewNopLogger())
+	metrics, err := replicationviewParse(mockReplicationViewStdout, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -80,7 +81,7 @@ func TestReplicationViewParseErrors(t *testing.T) {
 		"TEST2DB2,/TEST2CONF,\"2020-03-23\" 00:45:29.000000\",2020-03-23 06:06:45.000000,2,167543418,COMPLETE",
 	}
 	for i, out := range tests {
-		_, err := replicationviewParse(out, &config.Target{}, log.NewNopLogger())
+		_, err := replicationviewParse(out, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error on test case %d", i)
 		}
@@ -91,7 +92,7 @@ func TestReplicationViewCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcReplicationViewExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcReplicationViewExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockReplicationViewStdout, nil
 	}
 	expected := `
@@ -130,7 +131,7 @@ func TestReplicationViewCollector(t *testing.T) {
 	`
 	zone := "America/New_York"
 	timezone = &zone
-	collector := NewReplicationViewExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewReplicationViewExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -151,7 +152,7 @@ func TestReplicationViewCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcReplicationViewExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcReplicationViewExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -162,7 +163,7 @@ func TestReplicationViewCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="replicationview"} 0
 	`
-	collector := NewReplicationViewExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewReplicationViewExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -183,7 +184,7 @@ func TestReplicationViewCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcReplicationViewExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcReplicationViewExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -194,7 +195,7 @@ func TestReplicationViewCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="replicationview"} 1
 	`
-	collector := NewReplicationViewExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewReplicationViewExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -218,7 +219,7 @@ func TestDsmadmcReplicationView(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcReplicationView(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcReplicationView(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

@@ -16,6 +16,8 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"math"
 	"os"
 	"os/exec"
@@ -24,7 +26,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -71,7 +72,7 @@ func TestDsmadmcQueryWithError(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := dsmadmcQuery(&config.Target{}, "query", ctx, log.NewNopLogger())
+	_, err := dsmadmcQuery(&config.Target{}, "query", ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err == nil {
 		t.Errorf("Expected error")
 	}
@@ -84,7 +85,7 @@ func TestDsmadmcQueryWithNoResultsError(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcQuery(&config.Target{}, "query", ctx, log.NewNopLogger())
+	out, err := dsmadmcQuery(&config.Target{}, "query", ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

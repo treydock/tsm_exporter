@@ -16,13 +16,12 @@ package collector
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -47,14 +46,14 @@ type EventsCollector struct {
 	completed    *prometheus.Desc
 	duration     *prometheus.Desc
 	target       *config.Target
-	logger       log.Logger
+	logger       *slog.Logger
 }
 
 func init() {
 	registerCollector("events", true, NewEventsExporter)
 }
 
-func NewEventsExporter(target *config.Target, logger log.Logger) Collector {
+func NewEventsExporter(target *config.Target, logger *slog.Logger) Collector {
 	return &EventsCollector{
 		notCompleted: prometheus.NewDesc(prometheus.BuildFQName(namespace, "schedule", "not_completed"),
 			"Number of scheduled events not completed for today", []string{"schedule"}, nil),
@@ -77,7 +76,7 @@ func (c *EventsCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *EventsCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -85,7 +84,7 @@ func (c *EventsCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -138,7 +137,7 @@ func buildEventsCompletedQuery(target *config.Target) string {
 	return query
 }
 
-func dsmadmcEventsCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcEventsCompleted(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	out, err := dsmadmcQuery(target, buildEventsCompletedQuery(target), ctx, logger)
 	return out, err
 }
@@ -155,12 +154,12 @@ func buildEventsNotCompletedQuery(target *config.Target) string {
 	return query
 }
 
-func dsmadmcEventsNotCompleted(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcEventsNotCompleted(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	out, err := dsmadmcQuery(target, buildEventsNotCompletedQuery(target), ctx, logger)
 	return out, err
 }
 
-func eventsParse(completedOut string, notCompletedOut string, target *config.Target, logger log.Logger) (map[string]EventMetric, error) {
+func eventsParse(completedOut string, notCompletedOut string, target *config.Target, logger *slog.Logger) (map[string]EventMetric, error) {
 	metrics := make(map[string]EventMetric)
 	statusCond := []string{"Completed", "Future", "Started", "In Progress", "Pending"}
 	records, err := getRecords(completedOut, logger)
@@ -177,12 +176,12 @@ func eventsParse(completedOut string, notCompletedOut string, target *config.Tar
 		}
 		start, err := parseTime(record[1], target)
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse actual start time", "time", record[1], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Failed to parse actual start time", "time", record[1], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		completed, err := parseTime(record[2], target)
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse completed time", "time", record[2], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Failed to parse completed time", "time", record[2], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		duration := completed.Sub(start).Seconds()

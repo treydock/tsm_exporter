@@ -15,12 +15,11 @@ package collector
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -41,14 +40,14 @@ type ProcessCollector struct {
 	processedFiles *prometheus.Desc
 	processedBytes *prometheus.Desc
 	target         *config.Target
-	logger         log.Logger
+	logger         *slog.Logger
 }
 
 func init() {
 	registerCollector("process", true, NewProcessExporter)
 }
 
-func NewProcessExporter(target *config.Target, logger log.Logger) Collector {
+func NewProcessExporter(target *config.Target, logger *slog.Logger) Collector {
 	return &ProcessCollector{
 		count: prometheus.NewDesc(prometheus.BuildFQName(namespace, "process", "count"),
 			"Number of processes", []string{"process"}, nil),
@@ -68,7 +67,7 @@ func (c *ProcessCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *ProcessCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -76,7 +75,7 @@ func (c *ProcessCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -120,13 +119,13 @@ func (c *ProcessCollector) collect() ([]ProcessMetric, error) {
 	return metrics, err
 }
 
-func dsmadmcProcess(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcProcess(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	query := "SELECT process_num,process,files_processed,bytes_processed,bytes_to_process FROM processes"
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 
-func processParse(out string, logger log.Logger) ([]ProcessMetric, error) {
+func processParse(out string, logger *slog.Logger) ([]ProcessMetric, error) {
 	var metrics []ProcessMetric
 	records, err := getRecords(out, logger)
 	if err != nil {
@@ -140,13 +139,13 @@ func processParse(out string, logger log.Logger) ([]ProcessMetric, error) {
 		metric.name = record[1]
 		filesProcessed, err := parseFloat(record[2])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing files_processed", "value", record[2], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Error parsing files_processed", "value", record[2], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.filesProcessed = filesProcessed
 		bytesProcessed, err := parseFloat(record[3])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing bytes_processed", "value", record[3], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Error parsing bytes_processed", "value", record[3], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.bytesProcessed = bytesProcessed

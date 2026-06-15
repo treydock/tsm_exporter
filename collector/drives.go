@@ -16,12 +16,11 @@ package collector
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -45,14 +44,14 @@ type DrivesCollector struct {
 	state  *prometheus.Desc
 	volume *prometheus.Desc
 	target *config.Target
-	logger log.Logger
+	logger *slog.Logger
 }
 
 func init() {
 	registerCollector("drives", true, NewDrivesExporter)
 }
 
-func NewDrivesExporter(target *config.Target, logger log.Logger) Collector {
+func NewDrivesExporter(target *config.Target, logger *slog.Logger) Collector {
 	return &DrivesCollector{
 		online: prometheus.NewDesc(prometheus.BuildFQName(namespace, "drive", "online"),
 			"Inidicates if the drive is online, 1=online, 0=offline", []string{"library", "drive"}, nil),
@@ -72,7 +71,7 @@ func (c *DrivesCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -80,7 +79,7 @@ func (c *DrivesCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -125,12 +124,12 @@ func buildDrivesQuery(target *config.Target) string {
 	return query
 }
 
-func dsmadmcDrives(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcDrives(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	out, err := dsmadmcQuery(target, buildDrivesQuery(target), ctx, logger)
 	return out, err
 }
 
-func drivesParse(out string, logger log.Logger) ([]DriveMetric, error) {
+func drivesParse(out string, logger *slog.Logger) ([]DriveMetric, error) {
 	var metrics []DriveMetric
 	records, err := getRecords(out, logger)
 	if err != nil {

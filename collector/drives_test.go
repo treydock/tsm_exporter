@@ -16,13 +16,14 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -52,7 +53,7 @@ func TestBuildDrivesQuery(t *testing.T) {
 }
 
 func TestDrivesParse(t *testing.T) {
-	metrics, err := drivesParse(mockDriveStdout, log.NewNopLogger())
+	metrics, err := drivesParse(mockDriveStdout, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -70,7 +71,7 @@ func TestDrivesParseErrors(t *testing.T) {
 		"\"LIB1\"\",TAPE10,YES,LOADED,FOO1",
 	}
 	for i, out := range tests {
-		_, err := drivesParse(out, log.NewNopLogger())
+		_, err := drivesParse(out, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error in test case %d", i)
 		}
@@ -81,7 +82,7 @@ func TestDrivesCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockDriveStdout, nil
 	}
 	expected := `
@@ -138,7 +139,7 @@ func TestDrivesCollector(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="drives"} 0
 	`
-	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewDrivesExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -156,7 +157,7 @@ func TestDrivesCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -167,7 +168,7 @@ func TestDrivesCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="drives"} 0
 	`
-	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewDrivesExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -185,7 +186,7 @@ func TestDrivesCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcDrivesExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -196,7 +197,7 @@ func TestDrivesCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="drives"} 1
 	`
-	collector := NewDrivesExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewDrivesExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -217,7 +218,7 @@ func TestDsmadmcDrives(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcDrives(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcDrives(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

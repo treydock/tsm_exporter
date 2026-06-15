@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"os/exec"
@@ -26,8 +27,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -43,7 +42,7 @@ var (
 	execCommand     = exec.CommandContext
 	timeNow         = time.Now
 	collectorState  = make(map[string]bool)
-	factories       = make(map[string]func(target *config.Target, logger log.Logger) Collector)
+	factories       = make(map[string]func(target *config.Target, logger *slog.Logger) Collector)
 	collectDuration = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "exporter", "collector_duration_seconds"),
 		"Collector time duration.",
@@ -68,12 +67,12 @@ type TSMCollector struct {
 	Collectors map[string]Collector
 }
 
-func registerCollector(collector string, isDefaultEnabled bool, factory func(target *config.Target, logger log.Logger) Collector) {
+func registerCollector(collector string, isDefaultEnabled bool, factory func(target *config.Target, logger *slog.Logger) Collector) {
 	collectorState[collector] = isDefaultEnabled
 	factories[collector] = factory
 }
 
-func NewCollector(target *config.Target, logger log.Logger) *TSMCollector {
+func NewCollector(target *config.Target, logger *slog.Logger) *TSMCollector {
 	collectors := make(map[string]Collector)
 	for key, enabled := range collectorState {
 		enable := false
@@ -84,7 +83,7 @@ func NewCollector(target *config.Target, logger log.Logger) *TSMCollector {
 		}
 		var collector Collector
 		if enable {
-			collector = factories[key](target, log.With(logger, "collector", key, "target", target.Name))
+			collector = factories[key](target, logger.With("collector", key, "target", target.Name))
 			collectors[key] = collector
 		}
 	}
@@ -141,11 +140,11 @@ func parseTime(v string, target *config.Target) (time.Time, error) {
 	return t, err
 }
 
-func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logger *slog.Logger) (string, error) {
 	servername := fmt.Sprintf("-SERVERName=%s", target.Servername)
 	id := fmt.Sprintf("-ID=%s", target.Id)
 	password := fmt.Sprintf("-PAssword=%s", target.Password)
-	level.Debug(logger).Log("msg", "dsmadmc query", "query", query)
+	logger.Debug("dsmadmc query", "query", query)
 	cmd := execCommand(ctx, "dsmadmc", servername, id, password, "-DATAONLY=YES", "-COMMAdelimited", query)
 	os.Setenv("DSM_LOG", *dsmLogDir)
 	var stdout bytes.Buffer
@@ -158,14 +157,14 @@ func dsmadmcQuery(target *config.Target, query string, ctx context.Context, logg
 			return "", nil
 		}
 		if ctx.Err() == context.DeadlineExceeded {
-			level.Error(logger).Log("msg", "Timeout executing dsmadmc")
+			logger.Error("Timeout executing dsmadmc")
 			return "", ctx.Err()
 		} else {
-			level.Error(logger).Log("msg", "Error executing dsmadc", "err", stderr.String(), "out", stdout.String())
+			logger.Error("Error executing dsmadc", "err", stderr.String(), "out", stdout.String())
 			return "", err
 		}
 	}
-	level.Debug(logger).Log("msg", "query output", "out", stdout.String())
+	logger.Debug("query output", "out", stdout.String())
 	return stdout.String(), nil
 }
 
@@ -177,13 +176,13 @@ func buildInFilter(items []string) string {
 	return strings.Join(values, ",")
 }
 
-func getRecords(out string, logger log.Logger) ([][]string, error) {
+func getRecords(out string, logger *slog.Logger) ([][]string, error) {
 	data := strings.NewReader(out)
 	r := csv.NewReader(data)
 	r.FieldsPerRecord = -1
 	records, err := r.ReadAll()
 	if err != nil {
-		level.Error(logger).Log("msg", "Error reading CSV output", "err", err)
+		logger.Error("Error reading CSV output", "err", err)
 		return nil, err
 	}
 	return records, nil

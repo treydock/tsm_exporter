@@ -16,6 +16,8 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,7 +25,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -44,7 +45,7 @@ var (
 )
 
 func TestProcessParse(t *testing.T) {
-	metrics, err := processParse(mockProcessStdout, log.NewNopLogger())
+	metrics, err := processParse(mockProcessStdout, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -91,7 +92,7 @@ func TestProcessParseError(t *testing.T) {
 		"'\",100,\",Backup",
 	}
 	for i, out := range tests {
-		_, err := processParse(out, log.NewNopLogger())
+		_, err := processParse(out, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error for test case %d", i)
 		}
@@ -102,7 +103,7 @@ func TestProcessCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcProcessExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcProcessExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockProcessStdout, nil
 	}
 	expected := `
@@ -131,8 +132,7 @@ func TestProcessCollector(t *testing.T) {
 	tsm_process_processed_files{process="Replicate Node"} 312089684
 	tsm_process_processed_files{process="Space Reclamation"} 2111
 	`
-	w := log.NewSyncWriter(os.Stderr)
-	logger := log.NewLogfmtLogger(w)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	collector := NewProcessExporter(&config.Target{}, logger)
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
@@ -151,7 +151,7 @@ func TestProcessCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcProcessExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcProcessExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -162,7 +162,7 @@ func TestProcessCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="process"} 0
 	`
-	collector := NewProcessExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewProcessExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -179,7 +179,7 @@ func TestProcessCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcProcessExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcProcessExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -190,7 +190,7 @@ func TestProcessCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="process"} 1
 	`
-	collector := NewProcessExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewProcessExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -210,7 +210,7 @@ func TestDsmadmcProcess(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcProcess(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcProcess(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
