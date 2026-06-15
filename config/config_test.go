@@ -42,19 +42,19 @@ func TestReloadConfigBadConfigs(t *testing.T) {
 	}{
 		{
 			ConfigFile:    "/dne",
-			ExpectedError: "Error reading config file /dne: open /dne: no such file or directory",
+			ExpectedError: "error reading config file /dne: open /dne: no such file or directory",
 		},
 		{
 			ConfigFile:    "testdata/unknown-field.yaml",
-			ExpectedError: "Error parsing config file testdata/unknown-field.yaml: yaml: unmarshal errors:\n  line 5: field invalid_extra_field not found in type config.Target",
+			ExpectedError: "error parsing config file testdata/unknown-field.yaml: yaml: unmarshal errors:\n  line 5: field invalid_extra_field not found in type config.Target",
 		},
 		{
 			ConfigFile:    "testdata/missing-id.yaml",
-			ExpectedError: "Target tsm1.example.com must define 'id' value",
+			ExpectedError: "target tsm1.example.com must define 'id' value",
 		},
 		{
 			ConfigFile:    "testdata/missing-password.yaml",
-			ExpectedError: "Target tsm1.example.com must define 'password' value",
+			ExpectedError: "target tsm1.example.com must define 'password' value",
 		},
 	}
 	for i, test := range tests {

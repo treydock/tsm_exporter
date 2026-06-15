@@ -1,6 +1,6 @@
 ARG ARCH="amd64"
 ARG OS="linux"
-FROM ${ARCH}/centos:7
+FROM ${ARCH}/rockylinux:9
 LABEL maintainer="Trey Dockendorf <treydock@gmail.com>"
 ARG ARCH="amd64"
 ARG OS="linux"
