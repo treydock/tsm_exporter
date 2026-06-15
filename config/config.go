@@ -49,13 +49,13 @@ func (sc *SafeConfig) ReloadConfig(configFile string) error {
 	var c = &Config{}
 	yamlReader, err := os.Open(configFile)
 	if err != nil {
-		return fmt.Errorf("Error reading config file %s: %s", configFile, err)
+		return fmt.Errorf("error reading config file %s: %s", configFile, err)
 	}
 	defer yamlReader.Close()
 	decoder := yaml.NewDecoder(yamlReader)
 	decoder.KnownFields(true)
 	if err := decoder.Decode(c); err != nil {
-		return fmt.Errorf("Error parsing config file %s: %s", configFile, err)
+		return fmt.Errorf("error parsing config file %s: %s", configFile, err)
 	}
 	for key := range c.Targets {
 		target := c.Targets[key]
@@ -64,10 +64,10 @@ func (sc *SafeConfig) ReloadConfig(configFile string) error {
 			target.Servername = key
 		}
 		if target.Id == "" {
-			return fmt.Errorf("Target %s must define 'id' value", key)
+			return fmt.Errorf("target %s must define 'id' value", key)
 		}
 		if target.Password == "" {
-			return fmt.Errorf("Target %s must define 'password' value", key)
+			return fmt.Errorf("target %s must define 'password' value", key)
 		}
 		c.Targets[key] = target
 	}

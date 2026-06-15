@@ -36,6 +36,7 @@ replicationview | Collect metrics about replication | Enabled
 stgpools | Collect storage pool metrics | Enabled
 volumeusage | Collect aggregates of volume counts by node name | Enabled
 summary | Collect backup summary information | Enabled
+process | Collect process information about TSM processes | Enabled
 
 ## Configuration
 

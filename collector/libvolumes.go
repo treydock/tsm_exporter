@@ -142,7 +142,7 @@ func libvolumesParse(out string, logger log.Logger) (map[string]LibVolumeMetric,
 			metric.private += count
 		default:
 			level.Error(logger).Log("msg", "Unknown libvolume status encountered", "status", status, "record", strings.Join(record, ","))
-			return nil, fmt.Errorf("Unknown libvolume status encountered: %s", status)
+			return nil, fmt.Errorf("unknown libvolume status encountered: %s", status)
 		}
 		metrics[key] = metric
 	}
