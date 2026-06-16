@@ -16,6 +16,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"reflect"
 	"sort"
@@ -23,8 +24,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -60,14 +59,14 @@ type OccupancysCollector struct {
 	reporting *prometheus.Desc
 	files     *prometheus.Desc
 	target    *config.Target
-	logger    log.Logger
+	logger    *slog.Logger
 }
 
 func init() {
 	registerCollector("occupancy", true, NewOccupancysExporter)
 }
 
-func NewOccupancysExporter(target *config.Target, logger log.Logger) Collector {
+func NewOccupancysExporter(target *config.Target, logger *slog.Logger) Collector {
 	return &OccupancysCollector{
 		physical: prometheus.NewDesc(prometheus.BuildFQName(namespace, "occupancy", "physical_bytes"),
 			"Physical space occupied", []string{"nodename", "filespace", "storagepool"}, nil),
@@ -90,7 +89,7 @@ func (c *OccupancysCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *OccupancysCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -98,7 +97,7 @@ func (c *OccupancysCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -133,7 +132,7 @@ func (c *OccupancysCollector) collect() ([]OccupancyMetric, error) {
 	return metrics, err
 }
 
-func dsmadmcOccupancys(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcOccupancys(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	fields := getOccupancyFields()
 	var queryFields []string
 	var groupFields []string
@@ -152,7 +151,7 @@ func dsmadmcOccupancys(target *config.Target, ctx context.Context, logger log.Lo
 	return out, err
 }
 
-func occupancyParse(out string, logger log.Logger) ([]OccupancyMetric, error) {
+func occupancyParse(out string, logger *slog.Logger) ([]OccupancyMetric, error) {
 	var metrics []OccupancyMetric
 	fields := getOccupancyFields()
 	records, err := getRecords(out, logger)
@@ -174,7 +173,7 @@ func occupancyParse(out string, logger log.Logger) ([]OccupancyMetric, error) {
 			} else {
 				val, err := parseFloat(record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
+					logger.Error("Error parsing value", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
 					return nil, err
 				}
 				if strings.HasSuffix(k, "_MB") {

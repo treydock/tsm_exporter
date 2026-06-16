@@ -16,6 +16,8 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,7 +25,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -74,7 +75,7 @@ func TestBuildEventsNotCompletedQuery(t *testing.T) {
 }
 
 func TestEventsParse(t *testing.T) {
-	metrics, err := eventsParse(mockEventCompletedStdout, mockEventNotCompletedStdout, &config.Target{}, log.NewNopLogger())
+	metrics, err := eventsParse(mockEventCompletedStdout, mockEventNotCompletedStdout, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -101,7 +102,7 @@ func TestEventsParseErrors(t *testing.T) {
 		"\"FOO,2020-03-20 \"05:09:43.000000\",2020-03-20 05:40:14.000000",
 	}
 	for i, out := range tests {
-		_, err := eventsParse(out, mockEventNotCompletedStdout, &config.Target{}, log.NewNopLogger())
+		_, err := eventsParse(out, mockEventNotCompletedStdout, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error on test case %d", i)
 		}
@@ -110,7 +111,7 @@ func TestEventsParseErrors(t *testing.T) {
 		"FOO,\"Future\"\"",
 	}
 	for i, out := range tests {
-		_, err := eventsParse(mockEventCompletedStdout, out, &config.Target{}, log.NewNopLogger())
+		_, err := eventsParse(mockEventCompletedStdout, out, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error on test case %d", i)
 		}
@@ -121,10 +122,10 @@ func TestEventsCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockEventCompletedStdout, nil
 	}
-	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockEventNotCompletedStdout, nil
 	}
 	expected := `
@@ -148,8 +149,7 @@ func TestEventsCollector(t *testing.T) {
 	# TYPE tsm_schedule_start_timestamp_seconds gauge
 	tsm_schedule_start_timestamp_seconds{schedule="FOO"} 1584868183
 	`
-	w := log.NewSyncWriter(os.Stderr)
-	logger := log.NewLogfmtLogger(w)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	collector := NewEventsExporter(&config.Target{}, logger)
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
@@ -169,10 +169,10 @@ func TestEventsCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
-	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockEventNotCompletedStdout, nil
 	}
 	expected := `
@@ -183,7 +183,7 @@ func TestEventsCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="events"} 0
 	`
-	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewEventsExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -195,10 +195,10 @@ func TestEventsCollectorError(t *testing.T) {
 		"tsm_exporter_collect_error", "tsm_exporter_collect_timeout"); err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
-	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockEventCompletedStdout, nil
 	}
-	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
@@ -217,10 +217,10 @@ func TestEventsCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcEventsCompletedExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
-	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcEventsNotCompletedExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -231,7 +231,7 @@ func TestEventsCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="events"} 1
 	`
-	collector := NewEventsExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewEventsExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -252,7 +252,7 @@ func TestDsmadmcEventsCompleted(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcEventsCompleted(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcEventsCompleted(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
@@ -268,7 +268,7 @@ func TestDsmadmcEventsNotCompleted(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcEventsNotCompleted(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcEventsNotCompleted(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

@@ -16,12 +16,11 @@ package collector
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -41,14 +40,14 @@ type LibVolumeMetric struct {
 type LibVolumesCollector struct {
 	media  *prometheus.Desc
 	target *config.Target
-	logger log.Logger
+	logger *slog.Logger
 }
 
 func init() {
 	registerCollector("libvolumes", true, NewLibVolumesExporter)
 }
 
-func NewLibVolumesExporter(target *config.Target, logger log.Logger) Collector {
+func NewLibVolumesExporter(target *config.Target, logger *slog.Logger) Collector {
 	return &LibVolumesCollector{
 		media: prometheus.NewDesc(prometheus.BuildFQName(namespace, "libvolume", "media"),
 			"Number of tapes", []string{"mediatype", "library", "status"}, nil),
@@ -62,7 +61,7 @@ func (c *LibVolumesCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -70,7 +69,7 @@ func (c *LibVolumesCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -104,12 +103,12 @@ func buildLibVolumesQuery(target *config.Target) string {
 	return query
 }
 
-func dsmadmcLibVolumes(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcLibVolumes(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	out, err := dsmadmcQuery(target, buildLibVolumesQuery(target), ctx, logger)
 	return out, err
 }
 
-func libvolumesParse(out string, logger log.Logger) (map[string]LibVolumeMetric, error) {
+func libvolumesParse(out string, logger *slog.Logger) (map[string]LibVolumeMetric, error) {
 	metrics := make(map[string]LibVolumeMetric)
 	records, err := getRecords(out, logger)
 	if err != nil {
@@ -132,7 +131,7 @@ func libvolumesParse(out string, logger log.Logger) (map[string]LibVolumeMetric,
 		status := strings.ToLower(record[1])
 		count, err := parseFloat(record[3])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing libvolume value", "value", record[3], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Error parsing libvolume value", "value", record[3], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		switch status {
@@ -141,7 +140,7 @@ func libvolumesParse(out string, logger log.Logger) (map[string]LibVolumeMetric,
 		case "private":
 			metric.private += count
 		default:
-			level.Error(logger).Log("msg", "Unknown libvolume status encountered", "status", status, "record", strings.Join(record, ","))
+			logger.Error("Unknown libvolume status encountered", "status", status, "record", strings.Join(record, ","))
 			return nil, fmt.Errorf("unknown libvolume status encountered: %s", status)
 		}
 		metrics[key] = metric

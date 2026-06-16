@@ -15,12 +15,11 @@ package collector
 
 import (
 	"context"
+	"log/slog"
 	"regexp"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -38,14 +37,14 @@ type VolumeUsageMetric struct {
 type VolumeUsagesCollector struct {
 	usage  *prometheus.Desc
 	target *config.Target
-	logger log.Logger
+	logger *slog.Logger
 }
 
 func init() {
 	registerCollector("volumeusage", true, NewVolumeUsagesExporter)
 }
 
-func NewVolumeUsagesExporter(target *config.Target, logger log.Logger) Collector {
+func NewVolumeUsagesExporter(target *config.Target, logger *slog.Logger) Collector {
 	return &VolumeUsagesCollector{
 		usage: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volume", "usage"),
 			"Number of volumes used by node name", []string{"nodename", "volumename"}, nil),
@@ -59,7 +58,7 @@ func (c *VolumeUsagesCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *VolumeUsagesCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -67,7 +66,7 @@ func (c *VolumeUsagesCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -93,13 +92,13 @@ func (c *VolumeUsagesCollector) collect() ([]VolumeUsageMetric, error) {
 	return metrics, err
 }
 
-func dsmadmcVolumeUsages(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcVolumeUsages(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	query := "SELECT DISTINCT VOLUME_NAME,NODE_NAME FROM volumeusage"
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 
-func volumeusageParse(out string, target *config.Target, logger log.Logger) ([]VolumeUsageMetric, error) {
+func volumeusageParse(out string, target *config.Target, logger *slog.Logger) ([]VolumeUsageMetric, error) {
 	nodeVolumes := make(map[string][]string)
 	var metrics []VolumeUsageMetric
 	records, err := getRecords(out, logger)

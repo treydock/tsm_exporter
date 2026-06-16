@@ -16,14 +16,13 @@ package collector
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -49,14 +48,14 @@ type LogCollector struct {
 	Used   *prometheus.Desc
 	Free   *prometheus.Desc
 	target *config.Target
-	logger log.Logger
+	logger *slog.Logger
 }
 
 func init() {
 	registerCollector("log", true, NewLogExporter)
 }
 
-func NewLogExporter(target *config.Target, logger log.Logger) Collector {
+func NewLogExporter(target *config.Target, logger *slog.Logger) Collector {
 	return &LogCollector{
 		Total: prometheus.NewDesc(prometheus.BuildFQName(namespace, "active_log", "total_bytes"),
 			"Active log total space in bytes", nil, nil),
@@ -76,7 +75,7 @@ func (c *LogCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *LogCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -84,7 +83,7 @@ func (c *LogCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -110,14 +109,14 @@ func (c *LogCollector) collect() (LogMetric, error) {
 	return metrics, err
 }
 
-func dsmadmcLog(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcLog(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	fields := getLogFields()
 	query := fmt.Sprintf("SELECT %s FROM log", strings.Join(fields, ","))
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 
-func logParse(out string, logger log.Logger) (LogMetric, error) {
+func logParse(out string, logger *slog.Logger) (LogMetric, error) {
 	var metric LogMetric
 	fields := getLogFields()
 	records, err := getRecords(out, logger)
@@ -138,7 +137,7 @@ func logParse(out string, logger log.Logger) (LogMetric, error) {
 			} else {
 				val, err := parseFloat(record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
+					logger.Error("Error parsing value", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
 					return LogMetric{}, err
 				}
 				if strings.HasSuffix(k, "_MB") {

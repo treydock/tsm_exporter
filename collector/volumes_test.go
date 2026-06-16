@@ -16,6 +16,8 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,7 +25,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -46,7 +47,7 @@ READONLY,"5735346,0","94,6",DCULT7,F00529L7,STGPOOL3,FULL,1,1
 )
 
 func TestVolumesParse(t *testing.T) {
-	metrics, err := volumesParse(mockVolumeStdout, log.NewNopLogger())
+	metrics, err := volumesParse(mockVolumeStdout, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -60,7 +61,7 @@ func TestVolumesParse(t *testing.T) {
 }
 
 func TestVolumesParseComma(t *testing.T) {
-	metrics, err := volumesParse(mockVolumeStdoutComma, log.NewNopLogger())
+	metrics, err := volumesParse(mockVolumeStdoutComma, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -82,7 +83,7 @@ func TestVolumesParseError(t *testing.T) {
 		"UNAVAILABLE,\"8199467\",0\",\"68,5\",DCULT7,F00640L7,STGPOOL1,FULL,1,1",
 	}
 	for i, out := range tests {
-		_, err := volumesParse(out, log.NewNopLogger())
+		_, err := volumesParse(out, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error for test case %d", i)
 		}
@@ -95,7 +96,7 @@ func TestVolumesCollector(t *testing.T) {
 	}
 	classnameExclude := "^DCFILE.*"
 	volumesClassnameExclude = &classnameExclude
-	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockVolumeStdout, nil
 	}
 	expected := `
@@ -156,8 +157,7 @@ func TestVolumesCollector(t *testing.T) {
     # TYPE tsm_volumes_unavailable gauge
     tsm_volumes_unavailable 1
 	`
-	w := log.NewSyncWriter(os.Stderr)
-	logger := log.NewLogfmtLogger(w)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	collector := NewVolumesExporter(&config.Target{}, logger)
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
@@ -176,7 +176,7 @@ func TestVolumesCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -187,7 +187,7 @@ func TestVolumesCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="volumes"} 0
 	`
-	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewVolumesExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -205,7 +205,7 @@ func TestVolumesCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcVolumesExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -216,7 +216,7 @@ func TestVolumesCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="volumes"} 1
 	`
-	collector := NewVolumesExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewVolumesExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -237,7 +237,7 @@ func TestDsmadmcVolumes(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcVolumes(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcVolumes(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

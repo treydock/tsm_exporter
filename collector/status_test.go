@@ -16,13 +16,14 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -35,7 +36,7 @@ SP03,,1500,Off,Yes,05/22/2019 13:26:41,03/11/2020 14:36:50,On,90 Day(s),0,8,Clos
 )
 
 func TestStatusParse(t *testing.T) {
-	metrics, err := statusParse(mockStatusStdout, log.NewNopLogger())
+	metrics, err := statusParse(mockStatusStdout, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -53,7 +54,7 @@ func TestStatusErrors(t *testing.T) {
 		"SP03,,1500,\"Off,\n",
 	}
 	for i, out := range tests {
-		_, err := statusParse(out, log.NewNopLogger())
+		_, err := statusParse(out, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error in test case %d", i)
 		}
@@ -61,7 +62,7 @@ func TestStatusErrors(t *testing.T) {
 }
 
 func TestStatusParseNoServername(t *testing.T) {
-	metrics, err := statusParse("", log.NewNopLogger())
+	metrics, err := statusParse("", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -78,7 +79,7 @@ func TestStatusCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockStatusStdout, nil
 	}
 	expected := `
@@ -86,7 +87,7 @@ func TestStatusCollector(t *testing.T) {
     # TYPE tsm_status gauge
     tsm_status 1
 	`
-	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewStatusExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -104,7 +105,7 @@ func TestStatusCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -112,7 +113,7 @@ func TestStatusCollectorError(t *testing.T) {
     # TYPE tsm_status gauge
     tsm_status 0
 	`
-	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewStatusExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -130,7 +131,7 @@ func TestStatusCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcStatusExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -138,7 +139,7 @@ func TestStatusCollectorTimeout(t *testing.T) {
     # TYPE tsm_status gauge
     tsm_status 0
 	`
-	collector := NewStatusExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewStatusExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -159,7 +160,7 @@ func TestDsmadmcStatus(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcStatus(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcStatus(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

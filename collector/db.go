@@ -16,14 +16,13 @@ package collector
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -78,14 +77,14 @@ type DBCollector struct {
 	PkgHitRatio  *prometheus.Desc
 	LastBackup   *prometheus.Desc
 	target       *config.Target
-	logger       log.Logger
+	logger       *slog.Logger
 }
 
 func init() {
 	registerCollector("db", true, NewDBExporter)
 }
 
-func NewDBExporter(target *config.Target, logger log.Logger) Collector {
+func NewDBExporter(target *config.Target, logger *slog.Logger) Collector {
 	return &DBCollector{
 		TotalSpace: prometheus.NewDesc(prometheus.BuildFQName(namespace, "db", "space_total_bytes"),
 			"DB total space in bytes", []string{"dbname"}, nil),
@@ -132,7 +131,7 @@ func (c *DBCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *DBCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -140,7 +139,7 @@ func (c *DBCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -175,14 +174,14 @@ func (c *DBCollector) collect() ([]DBMetric, error) {
 	return metrics, err
 }
 
-func dsmadmcDB(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcDB(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	fields := getDBFields()
 	query := fmt.Sprintf("SELECT %s FROM db", strings.Join(fields, ","))
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 
-func dbParse(out string, target *config.Target, logger log.Logger) ([]DBMetric, error) {
+func dbParse(out string, target *config.Target, logger *slog.Logger) ([]DBMetric, error) {
 	var metrics []DBMetric
 	fields := getDBFields()
 	records, err := getRecords(out, logger)
@@ -205,7 +204,7 @@ func dbParse(out string, target *config.Target, logger log.Logger) ([]DBMetric, 
 				}
 				t, err := parseTime(record[i], target)
 				if err != nil {
-					level.Error(logger).Log("msg", "Error parsing time", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
+					logger.Error("Error parsing time", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
 					return nil, err
 				}
 				f.SetFloat(float64(t.Unix()))
@@ -214,7 +213,7 @@ func dbParse(out string, target *config.Target, logger log.Logger) ([]DBMetric, 
 			} else {
 				val, err := parseFloat(record[i])
 				if err != nil {
-					level.Error(logger).Log("msg", "Error parsing value", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
+					logger.Error("Error parsing value", "key", k, "value", record[i], "record", strings.Join(record, ","), "err", err)
 					return nil, err
 				}
 				if strings.HasSuffix(k, "_MB") {

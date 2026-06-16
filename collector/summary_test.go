@@ -16,13 +16,14 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -73,7 +74,7 @@ func TestBuildTapeMountQuery(t *testing.T) {
 }
 
 func TestSummaryParse(t *testing.T) {
-	metrics, err := summaryParse(mockSummaryStdout, mockTapeMountStdout, &config.Target{}, log.NewNopLogger())
+	metrics, err := summaryParse(mockSummaryStdout, mockTapeMountStdout, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -91,7 +92,7 @@ func TestSummaryParseErrors(t *testing.T) {
 		"BACKUP,BCPDB-TEST_ENC,\"DAILY_BCPDB-TEST,1340416600,2020-12-05 01:01:26.000000,2020-12-05 01:01:26.000000\n",
 	}
 	for i, out := range tests {
-		_, err := summaryParse(out, mockTapeMountStdout, &config.Target{}, log.NewNopLogger())
+		_, err := summaryParse(out, mockTapeMountStdout, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error in test case %d", i)
 		}
@@ -102,7 +103,7 @@ func TestSummaryParseErrors(t *testing.T) {
 		"TAPE MOUNT,F02762L7,TAPE10 (/dev/lin_tape/by-id/IBMtape10),2022-10-31 20:29:53.000000,foo",
 	}
 	for i, out := range tests {
-		_, err := summaryParse(mockSummaryStdout, out, &config.Target{}, log.NewNopLogger())
+		_, err := summaryParse(mockSummaryStdout, out, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error in test case %d", i)
 		}
@@ -115,7 +116,7 @@ func TestSummaryCollector(t *testing.T) {
 	}
 	zone := "America/New_York"
 	timezone = &zone
-	DsmadmcSummaryExec = func(target *config.Target, tapeMount bool, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcSummaryExec = func(target *config.Target, tapeMount bool, ctx context.Context, logger *slog.Logger) (string, error) {
 		if tapeMount {
 			return mockTapeMountStdout, nil
 		} else {
@@ -150,7 +151,7 @@ func TestSummaryCollector(t *testing.T) {
 	tsm_tape_mount_start_timestamp_seconds{drive="TAPE05",volume="F02757L7"} 1667257561
 	tsm_tape_mount_start_timestamp_seconds{drive="TAPE10",volume="F02762L7"} 1667262593
 	`
-	collector := NewSummaryExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewSummaryExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -169,7 +170,7 @@ func TestSummaryCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcSummaryExec = func(target *config.Target, tapeMount bool, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcSummaryExec = func(target *config.Target, tapeMount bool, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -180,7 +181,7 @@ func TestSummaryCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="summary"} 0
 	`
-	collector := NewSummaryExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewSummaryExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -198,7 +199,7 @@ func TestSummaryCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcSummaryExec = func(target *config.Target, tapeMount bool, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcSummaryExec = func(target *config.Target, tapeMount bool, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -209,7 +210,7 @@ func TestSummaryCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="summary"} 1
 	`
-	collector := NewSummaryExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewSummaryExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -230,7 +231,7 @@ func TestDsmadmcSummary(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcSummary(&config.Target{}, false, ctx, log.NewNopLogger())
+	out, err := dsmadmcSummary(&config.Target{}, false, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

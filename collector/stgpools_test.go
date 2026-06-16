@@ -16,6 +16,8 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,7 +25,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -40,7 +41,7 @@ DCULT7,3199882345.5,,,,99.7,42.6,PRIMARY,PTGPFS,DEVCLASS,,
 )
 
 func TestStoragePoolParse(t *testing.T) {
-	metrics, err := stgpoolsParse(mockedStoragePoolStdout, log.NewNopLogger())
+	metrics, err := stgpoolsParse(mockedStoragePoolStdout, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -63,7 +64,7 @@ func TestStoragePoolParseErrors(t *testing.T) {
 		"DISK,0.0,,\",,100.0,0.0,PRIMARY,ARCHIVEPOOL,DEVCLASS,,\n",
 	}
 	for i, out := range tests {
-		_, err := stgpoolsParse(out, log.NewNopLogger())
+		_, err := stgpoolsParse(out, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error in test case %d", i)
 		}
@@ -74,7 +75,7 @@ func TestStoragePoolCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockedStoragePoolStdout, nil
 	}
 	expected := `
@@ -115,8 +116,7 @@ func TestStoragePoolCollector(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="stgpools"} 0
 	`
-	w := log.NewSyncWriter(os.Stderr)
-	logger := log.NewLogfmtLogger(w)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	collector := NewStoragePoolExporter(&config.Target{}, logger)
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
@@ -138,7 +138,7 @@ func TestStoragePoolCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -149,7 +149,7 @@ func TestStoragePoolCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="stgpools"} 0
 	`
-	collector := NewStoragePoolExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewStoragePoolExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -166,7 +166,7 @@ func TestStoragePoolCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcStoragePoolExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -177,7 +177,7 @@ func TestStoragePoolCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="stgpools"} 1
 	`
-	collector := NewStoragePoolExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewStoragePoolExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -197,7 +197,7 @@ func TestDsmadmcStoragePool(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcStoragePool(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcStoragePool(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

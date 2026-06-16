@@ -16,6 +16,8 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,7 +25,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -43,7 +44,7 @@ Data,to,ignore
 )
 
 func TestDBParse(t *testing.T) {
-	metrics, err := dbParse(mockedDBStdout, &config.Target{}, log.NewNopLogger())
+	metrics, err := dbParse(mockedDBStdout, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -58,7 +59,7 @@ func TestDBParse(t *testing.T) {
 	if val := metrics[0].BuffHitRatio; fmt.Sprintf("%.3f", val) != "0.886" {
 		t.Errorf("Unexpected BuffHitRatio, got %v", val)
 	}
-	metrics, err = dbParse(mockedDBStdoutNoBackup, &config.Target{}, log.NewNopLogger())
+	metrics, err = dbParse(mockedDBStdoutNoBackup, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -73,7 +74,7 @@ func TestDBParse(t *testing.T) {
 }
 
 func TestDBParseCommas(t *testing.T) {
-	metrics, err := dbParse(mockedDBStdoutComma, &config.Target{}, log.NewNopLogger())
+	metrics, err := dbParse(mockedDBStdoutComma, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -97,7 +98,7 @@ func TestDBParseErrors(t *testing.T) {
 		"\"88.6\"\",TSMDB1,3092796,1453663,foo,98.3,0,11607707032,28836868,2096672,28836092,642976,25743296\n",
 	}
 	for i, out := range tests {
-		_, err := dbParse(out, &config.Target{}, log.NewNopLogger())
+		_, err := dbParse(out, &config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error in test case %d", i)
 		}
@@ -108,7 +109,7 @@ func TestDBCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockedDBStdout, nil
 	}
 	expected := `
@@ -157,8 +158,7 @@ func TestDBCollector(t *testing.T) {
 	`
 	zone := "America/New_York"
 	timezone = &zone
-	w := log.NewSyncWriter(os.Stderr)
-	logger := log.NewLogfmtLogger(w)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	collector := NewDBExporter(&config.Target{}, logger)
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
@@ -180,7 +180,7 @@ func TestDBCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -191,7 +191,7 @@ func TestDBCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="db"} 0
 	`
-	collector := NewDBExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewDBExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -208,7 +208,7 @@ func TestDBCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcDBExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -219,7 +219,7 @@ func TestDBCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="db"} 1
 	`
-	collector := NewDBExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewDBExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -239,7 +239,7 @@ func TestDsmadmcDB(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcDB(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcDB(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

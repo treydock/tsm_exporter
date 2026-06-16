@@ -16,13 +16,14 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -51,7 +52,7 @@ func TestBuildLibVolumeQuery(t *testing.T) {
 }
 
 func TestLibVolumesParse(t *testing.T) {
-	metrics, err := libvolumesParse(mockLibVolumeStdout, log.NewNopLogger())
+	metrics, err := libvolumesParse(mockLibVolumeStdout, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -68,7 +69,7 @@ func TestLibVolumesParseErrors(t *testing.T) {
 		"LTO-7,Foo,LIB1,153\n",
 	}
 	for i, out := range tests {
-		_, err := libvolumesParse(out, log.NewNopLogger())
+		_, err := libvolumesParse(out, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error in test case %d", i)
 		}
@@ -79,7 +80,7 @@ func TestLibVolumesCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockLibVolumeStdout, nil
 	}
 	expected := `
@@ -98,7 +99,7 @@ func TestLibVolumesCollector(t *testing.T) {
 	tsm_libvolume_media{library="LIB1",mediatype="LTO-7",status="private"} 1082
 	tsm_libvolume_media{library="LIB1",mediatype="LTO-7",status="scratch"} 153
 	`
-	collector := NewLibVolumesExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewLibVolumesExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -116,7 +117,7 @@ func TestLibVolumesCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -127,7 +128,7 @@ func TestLibVolumesCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="libvolumes"} 0
 	`
-	collector := NewLibVolumesExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewLibVolumesExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -145,7 +146,7 @@ func TestLibVolumesCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcLibVolumesExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -156,7 +157,7 @@ func TestLibVolumesCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="libvolumes"} 1
 	`
-	collector := NewLibVolumesExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewLibVolumesExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -177,7 +178,7 @@ func TestDsmadmcLibVolumes(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcLibVolumes(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcLibVolumes(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

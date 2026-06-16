@@ -16,13 +16,14 @@ package collector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -42,7 +43,7 @@ Data,to,ignore
 )
 
 func TestOccupancysParse(t *testing.T) {
-	metrics, err := occupancyParse(mockOccupancyStdout, log.NewNopLogger())
+	metrics, err := occupancyParse(mockOccupancyStdout, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -56,7 +57,7 @@ func TestOccupancysParse(t *testing.T) {
 }
 
 func TestOccupancysParseComma(t *testing.T) {
-	metrics, err := occupancyParse(mockOccupancyStdoutComma, log.NewNopLogger())
+	metrics, err := occupancyParse(mockOccupancyStdoutComma, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
@@ -75,7 +76,7 @@ func TestOccupancysParseErrors(t *testing.T) {
 		"/home,\"59\",94\",NETAPPUSER,3,\"59,94\",\"59,94\",PFNETAPP",
 	}
 	for i, out := range tests {
-		_, err := occupancyParse(out, log.NewNopLogger())
+		_, err := occupancyParse(out, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err == nil {
 			t.Errorf("Expected error in test case %d", i)
 		}
@@ -86,7 +87,7 @@ func TestOccupancysCollector(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return mockOccupancyStdout, nil
 	}
 	expected := `
@@ -115,7 +116,7 @@ func TestOccupancysCollector(t *testing.T) {
 	tsm_occupancy_reporting_bytes{filespace="/home",nodename="NETAPPUSER",storagepool="PFNETAPP"} 60817408
 	tsm_occupancy_reporting_bytes{filespace="/usr/exploit",nodename="MORGON",storagepool="CLOUDTSMAZ"} 1048576000
 	`
-	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewOccupancysExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -134,7 +135,7 @@ func TestOccupancysCollectorError(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", fmt.Errorf("Error")
 	}
 	expected := `
@@ -145,7 +146,7 @@ func TestOccupancysCollectorError(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="occupancy"} 0
 	`
-	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewOccupancysExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -163,7 +164,7 @@ func TestOccupancysCollectorTimeout(t *testing.T) {
 	if _, err := kingpin.CommandLine.Parse([]string{}); err != nil {
 		t.Fatal(err)
 	}
-	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+	DsmadmcOccupancysExec = func(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 		return "", context.DeadlineExceeded
 	}
 	expected := `
@@ -174,7 +175,7 @@ func TestOccupancysCollectorTimeout(t *testing.T) {
     # TYPE tsm_exporter_collect_timeout gauge
     tsm_exporter_collect_timeout{collector="occupancy"} 1
 	`
-	collector := NewOccupancysExporter(&config.Target{}, log.NewNopLogger())
+	collector := NewOccupancysExporter(&config.Target{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	gatherers := setupGatherer(collector)
 	if val, err := testutil.GatherAndCount(gatherers); err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -195,7 +196,7 @@ func TestDsmadmcOccupancys(t *testing.T) {
 	defer func() { execCommand = exec.CommandContext }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := dsmadmcOccupancys(&config.Target{}, ctx, log.NewNopLogger())
+	out, err := dsmadmcOccupancys(&config.Target{}, ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}

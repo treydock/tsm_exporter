@@ -16,13 +16,12 @@ package collector
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -50,14 +49,14 @@ type SummaryCollector struct {
 	tapeMountStartTime *prometheus.Desc
 	tapeMountEndTime   *prometheus.Desc
 	target             *config.Target
-	logger             log.Logger
+	logger             *slog.Logger
 }
 
 func init() {
 	registerCollector("summary", true, NewSummaryExporter)
 }
 
-func NewSummaryExporter(target *config.Target, logger log.Logger) Collector {
+func NewSummaryExporter(target *config.Target, logger *slog.Logger) Collector {
 	labels := []string{"activity", "entity", "schedule"}
 	tapeMountLabels := []string{"volume", "drive"}
 	return &SummaryCollector{
@@ -82,7 +81,7 @@ func (c *SummaryCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *SummaryCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -90,7 +89,7 @@ func (c *SummaryCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -159,7 +158,7 @@ func buildTapeMountQuery() string {
 	return query
 }
 
-func dsmadmcSummary(target *config.Target, tapeMount bool, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcSummary(target *config.Target, tapeMount bool, ctx context.Context, logger *slog.Logger) (string, error) {
 	var query string
 	if tapeMount {
 		query = buildTapeMountQuery()
@@ -170,7 +169,7 @@ func dsmadmcSummary(target *config.Target, tapeMount bool, ctx context.Context, 
 	return out, err
 }
 
-func summaryParse(summary string, tapeMount string, target *config.Target, logger log.Logger) (map[string]SummaryMetric, error) {
+func summaryParse(summary string, tapeMount string, target *config.Target, logger *slog.Logger) (map[string]SummaryMetric, error) {
 	metrics := make(map[string]SummaryMetric)
 	summaryRecords, err := getRecords(summary, logger)
 	if err != nil {
@@ -197,19 +196,19 @@ func summaryParse(summary string, tapeMount string, target *config.Target, logge
 		metric.schedule = schedule
 		bytes, err := parseFloat(record[3])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing summary bytes", "value", record[3], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Error parsing summary bytes", "value", record[3], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.bytes = bytes
 		startTime, err := parseTime(record[4], target)
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse START_TIME", "value", record[4], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Failed to parse START_TIME", "value", record[4], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.startTime = float64(startTime.Unix())
 		endTime, err := parseTime(record[5], target)
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", record[5], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Failed to parse END_TIME", "value", record[5], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.endTime = float64(endTime.Unix())
@@ -232,13 +231,13 @@ func summaryParse(summary string, tapeMount string, target *config.Target, logge
 		metric.drive = drive
 		startTime, err := parseTime(record[3], target)
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse START_TIME", "value", record[3], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Failed to parse START_TIME", "value", record[3], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.startTime = float64(startTime.Unix())
 		endTime, err := parseTime(record[4], target)
 		if err != nil {
-			level.Error(logger).Log("msg", "Failed to parse END_TIME", "value", record[4], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Failed to parse END_TIME", "value", record[4], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.endTime = float64(endTime.Unix())

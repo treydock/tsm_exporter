@@ -15,14 +15,13 @@ package collector
 
 import (
 	"context"
+	"log/slog"
 	"math"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -56,14 +55,14 @@ type VolumesCollector struct {
 	times_mounted *prometheus.Desc
 	write_pass    *prometheus.Desc
 	target        *config.Target
-	logger        log.Logger
+	logger        *slog.Logger
 }
 
 func init() {
 	registerCollector("volumes", true, NewVolumesExporter)
 }
 
-func NewVolumesExporter(target *config.Target, logger log.Logger) Collector {
+func NewVolumesExporter(target *config.Target, logger *slog.Logger) Collector {
 	return &VolumesCollector{
 		unavailable: prometheus.NewDesc(prometheus.BuildFQName(namespace, "volumes", "unavailable"),
 			"Number of unavailable volumes", nil, nil),
@@ -98,7 +97,7 @@ func (c *VolumesCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *VolumesCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	timeout := 0
 	errorMetric := 0
@@ -106,7 +105,7 @@ func (c *VolumesCollector) Collect(ch chan<- prometheus.Metric) {
 	if err == context.DeadlineExceeded {
 		timeout = 1
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		errorMetric = 1
 	}
 
@@ -157,13 +156,13 @@ func (c *VolumesCollector) collect() ([]VolumeMetric, error) {
 	return metrics, err
 }
 
-func dsmadmcVolumes(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcVolumes(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	query := "SELECT access,est_capacity_mb,pct_utilized,devclass_name,volume_name,stgpool_name,status,times_mounted,write_pass FROM volumes"
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 
-func volumesParse(out string, logger log.Logger) ([]VolumeMetric, error) {
+func volumesParse(out string, logger *slog.Logger) ([]VolumeMetric, error) {
 	classnameExcludePattern := regexp.MustCompile(*volumesClassnameExclude)
 	var metrics []VolumeMetric
 	records, err := getRecords(out, logger)
@@ -178,7 +177,7 @@ func volumesParse(out string, logger log.Logger) ([]VolumeMetric, error) {
 		metric.name = record[4]
 		metric.classname = record[3]
 		if *volumesClassnameExclude != "" && classnameExcludePattern.MatchString(metric.classname) {
-			level.Debug(logger).Log("msg", "Skipping volume due to classname exclude", "volume", metric.name, "classname", metric.classname)
+			logger.Debug("Skipping volume due to classname exclude", "volume", metric.name, "classname", metric.classname)
 			continue
 		}
 		metric.access = record[0]
@@ -186,25 +185,25 @@ func volumesParse(out string, logger log.Logger) ([]VolumeMetric, error) {
 		metric.status = record[6]
 		capacity, err := parseFloat(record[1])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing est_capacity_mb", "value", record[1], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Error parsing est_capacity_mb", "value", record[1], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.capacity = capacity * 1024 * 1024
 		utilized, err := parseFloat(record[2])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing pct_utilized value", "value", record[2], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Error parsing pct_utilized value", "value", record[2], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.utilized = utilized / 100
 		times_mounted, err := parseFloat(record[7])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing times_mounted", "value", record[7], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Error parsing times_mounted", "value", record[7], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.times_mounted = times_mounted
 		write_pass, err := parseFloat(record[8])
 		if err != nil {
-			level.Error(logger).Log("msg", "Error parsing write_pass", "value", record[8], "record", strings.Join(record, ","), "err", err)
+			logger.Error("Error parsing write_pass", "value", record[8], "record", strings.Join(record, ","), "err", err)
 			return nil, err
 		}
 		metric.write_pass = write_pass

@@ -15,11 +15,10 @@ package collector
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/treydock/tsm_exporter/config"
 )
@@ -38,14 +37,14 @@ type StatusMetric struct {
 type StatusCollector struct {
 	status *prometheus.Desc
 	target *config.Target
-	logger log.Logger
+	logger *slog.Logger
 }
 
 func init() {
 	registerCollector("status", true, NewStatusExporter)
 }
 
-func NewStatusExporter(target *config.Target, logger log.Logger) Collector {
+func NewStatusExporter(target *config.Target, logger *slog.Logger) Collector {
 	return &StatusCollector{
 		status: prometheus.NewDesc(prometheus.BuildFQName(namespace, "", "status"),
 			"Status of TSM, 1=online 0=failure", nil, nil),
@@ -59,20 +58,20 @@ func (c *StatusCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *StatusCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.logger).Log("msg", "Collecting metrics")
+	c.logger.Debug("Collecting metrics")
 	collectTime := time.Now()
 	metrics, err := c.collect()
 	if err == context.DeadlineExceeded {
 		metrics.status = 0
 		metrics.reason = "timeout"
 	} else if err != nil {
-		level.Error(c.logger).Log("msg", err)
+		c.logger.Error(err.Error())
 		metrics.status = 0
 		metrics.reason = "error"
 	}
 
 	if metrics.status == 0 {
-		level.Error(c.logger).Log("msg", "TSM query status is not healthy",
+		c.logger.Error("TSM query status is not healthy",
 			"servername", metrics.serverName, "reason", metrics.reason, "err", err)
 	}
 
@@ -92,13 +91,13 @@ func (c *StatusCollector) collect() (StatusMetric, error) {
 	return metrics, err
 }
 
-func dsmadmcStatus(target *config.Target, ctx context.Context, logger log.Logger) (string, error) {
+func dsmadmcStatus(target *config.Target, ctx context.Context, logger *slog.Logger) (string, error) {
 	query := "QUERY STATUS"
 	out, err := dsmadmcQuery(target, query, ctx, logger)
 	return out, err
 }
 
-func statusParse(out string, logger log.Logger) (StatusMetric, error) {
+func statusParse(out string, logger *slog.Logger) (StatusMetric, error) {
 	var metric StatusMetric
 	records, err := getRecords(out, logger)
 	if err != nil {
