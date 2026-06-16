@@ -1,3 +1,9 @@
+## 2.2.0 / 2026-06-16
+
+* Add process collector (#54)
+* Update to Go 1.26 (#55)
+* Update Go dependencies and switch to slog (#56)
+
 ## 2.1.0 / 2023-05-17
 
 ### Changes
