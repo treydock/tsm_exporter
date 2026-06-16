@@ -1,5 +1,5 @@
 # Needs to be defined before including Makefile.common to auto-generate targets
-DOCKER_ARCHS ?= amd65
+DOCKER_ARCHS ?= amd64
 DOCKER_REPO	 ?= treydock
 export GOPATH ?= $(firstword $(subst :, ,$(shell go env GOPATH)))
 GOLANGCI_LINT_VERSION ?= v2.12.2
